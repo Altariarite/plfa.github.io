@@ -1,0 +1,2077 @@
+\hypertarget{Equality}{%
+\chapter{Equality: Equality and equational reasoning}\label{Equality}}
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{module}\AgdaSpace{}%
+\AgdaModule{plfa.part1.Equality}\AgdaSpace{}%
+\AgdaKeyword{where}\<%
+\end{code}
+\end{fence}
+
+Much of our reasoning has involved equality. Given two terms \texttt{M}
+and \texttt{N}, both of type \texttt{A}, we write \texttt{M\ ≡\ N} to
+assert that \texttt{M} and \texttt{N} are interchangeable. So far we
+have treated equality as a primitive, here we show how to define it as
+an inductive datatype.
+
+\hypertarget{imports}{%
+\section{Imports}\label{imports}}
+
+This chapter has no imports. Every chapter in this book, and nearly
+every module in the Agda standard library, imports equality. Since we
+define equality here, any import would create a conflict.
+
+\hypertarget{equality}{%
+\section{Equality}\label{equality}}
+
+We declare equality as follows:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{data}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\AgdaUnderscore{}≡\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSpace{}%
+\AgdaKeyword{where}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaInductiveConstructor{refl}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{x}\<%
+\end{code}
+\end{fence}
+
+In other words, for any type \texttt{A} and for any \texttt{x} of type
+\texttt{A}, the constructor \texttt{refl} provides evidence that
+\texttt{x\ ≡\ x}. Hence, every value is equal to itself, and we have no
+other way of showing values equal. The definition features an asymmetry,
+in that the first argument to \texttt{\_≡\_} is given by the parameter
+\texttt{x\ :\ A}, while the second is given by an index in
+\texttt{A\ →\ Set}. This follows our policy of using parameters wherever
+possible. The first argument to \texttt{\_≡\_} can be a parameter
+because it doesn't vary, while the second must be an index, so it can be
+required to be equal to the first.
+
+We declare the precedence of equality as follows:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{infix}\AgdaSpace{}%
+\AgdaNumber{4}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\AgdaUnderscore{}≡\AgdaUnderscore{}}}\<%
+\end{code}
+\end{fence}
+
+We set the precedence of \texttt{\_≡\_} at level 4, the same as
+\texttt{\_≤\_}, which means it binds less tightly than any arithmetic
+operator. It associates neither to left nor right; writing
+\texttt{x\ ≡\ y\ ≡\ z} is illegal.
+
+\hypertarget{equality-is-an-equivalence-relation}{%
+\section{Equality is an equivalence
+relation}\label{equality-is-an-equivalence-relation}}
+
+An equivalence relation is one which is reflexive, symmetric, and
+transitive. Reflexivity is built-in to the definition of equality, via
+the constructor \texttt{refl}. It is straightforward to show symmetry:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{sym}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{x}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[29I]\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\\
+\>[.][@{}l@{}]\<[29I]%
+\>[4]\AgdaComment{-----}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{x}\<%
+\\
+\>[0]\AgdaFunction{sym}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\<%
+\end{code}
+\end{fence}
+
+How does this proof work? The argument to \texttt{sym} has type
+\texttt{x\ ≡\ y}, but on the left-hand side of the equation the argument
+has been instantiated to the pattern \texttt{refl}, which requires that
+\texttt{x} and \texttt{y} are the same. Hence, for the right-hand side
+of the equation we need a term of type \texttt{x\ ≡\ x}, and
+\texttt{refl} will do.
+
+It is instructive to develop \texttt{sym} interactively. To start, we
+supply a variable for the argument on the left, and a hole for the body
+on the right:
+
+\begin{myDisplay}
+sym : ∀ {A : Set} {x y : A}
+  → x ≡ y
+    -----
+  → y ≡ x
+sym e = {! !}
+\end{myDisplay}
+
+If we go into the hole and type \texttt{C-c\ C-,} then Agda reports:
+
+\begin{myDisplay}
+Goal: .y ≡ .x
+————————————————————————————————————————————————————————————
+e  : .x ≡ .y
+.y : .A
+.x : .A
+.A : Set
+\end{myDisplay}
+
+If in the hole we type \texttt{C-c\ C-c\ e} then Agda will instantiate
+\texttt{e} to all possible constructors, with one equation for each.
+There is only one possible constructor:
+
+\begin{myDisplay}
+sym : ∀ {A : Set} {x y : A}
+  → x ≡ y
+    -----
+  → y ≡ x
+sym refl = {! !}
+\end{myDisplay}
+
+If we go into the hole again and type \texttt{C-c\ C-,} then Agda now
+reports:
+
+\begin{myDisplay}
+ Goal: .x ≡ .x
+ ————————————————————————————————————————————————————————————
+ .x : .A
+ .A : Set
+\end{myDisplay}
+
+This is the key step---Agda has worked out that \texttt{x} and
+\texttt{y} must be the same to match the pattern \texttt{refl}!
+
+Finally, if we go back into the hole and type \texttt{C-c\ C-r} it will
+instantiate the hole with the one constructor that yields a value of the
+expected type:
+
+\begin{myDisplay}
+sym : ∀ {A : Set} {x y : A}
+  → x ≡ y
+    -----
+  → y ≡ x
+sym refl = refl
+\end{myDisplay}
+
+This completes the definition as given above.
+
+Transitivity is equally straightforward:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{trans}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{x}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaBound{z}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}%
+\>[51I]\AgdaBound{y}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{z}\<%
+\\
+\>[.][@{}l@{}]\<[51I]%
+\>[4]\AgdaComment{-----}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{z}\<%
+\\
+\>[0]\AgdaFunction{trans}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}%
+\>[17]\AgdaSymbol{=}%
+\>[20]\AgdaInductiveConstructor{refl}\<%
+\end{code}
+\end{fence}
+
+Again, a useful exercise is to carry out an interactive development,
+checking how Agda's knowledge changes as each of the two arguments is
+instantiated.
+
+\hypertarget{Equality-cong}{%
+\section{Congruence and substitution}\label{Equality-cong}}
+
+Equality satisfies \emph{congruence}. If two terms are equal, they
+remain so after the same function is applied to both:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{cong}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{f}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{x}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[74I]\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\\
+\>[.][@{}l@{}]\<[74I]%
+\>[4]\AgdaComment{---------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{f}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{f}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\\
+\>[0]\AgdaFunction{cong}\AgdaSpace{}%
+\AgdaBound{f}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}%
+\>[13]\AgdaSymbol{=}%
+\>[16]\AgdaInductiveConstructor{refl}\<%
+\end{code}
+\end{fence}
+
+Congruence of functions with two arguments is similar:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{cong₂}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{C}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{f}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{C}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{u}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{v}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{u}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{x}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}%
+\>[109I]\AgdaBound{v}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\\
+\>[.][@{}l@{}]\<[109I]%
+\>[4]\AgdaComment{-------------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{f}\AgdaSpace{}%
+\AgdaBound{u}\AgdaSpace{}%
+\AgdaBound{v}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{f}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\\
+\>[0]\AgdaFunction{cong₂}\AgdaSpace{}%
+\AgdaBound{f}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}%
+\>[19]\AgdaSymbol{=}%
+\>[22]\AgdaInductiveConstructor{refl}\<%
+\end{code}
+\end{fence}
+
+Equality is also a congruence in the function position of an
+application. If two functions are equal, then applying them to the same
+term yields equal terms:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{cong-app}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{f}\AgdaSpace{}%
+\AgdaBound{g}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[134I]\AgdaBound{f}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{g}\<%
+\\
+\>[.][@{}l@{}]\<[134I]%
+\>[4]\AgdaComment{---------------------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{f}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{g}\AgdaSpace{}%
+\AgdaBound{x}\<%
+\\
+\>[0]\AgdaFunction{cong-app}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\<%
+\end{code}
+\end{fence}
+
+Equality also satisfies \emph{substitution}. If two values are equal and
+a predicate holds of the first then it also holds of the second:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{subst}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{x}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{P}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{)}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[165I]\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\\
+\>[.][@{}l@{}]\<[165I]%
+\>[4]\AgdaComment{---------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{P}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{P}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\\
+\>[0]\AgdaFunction{subst}\AgdaSpace{}%
+\AgdaBound{P}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\AgdaSpace{}%
+\AgdaBound{px}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{px}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{chains-of-equations}{%
+\section{Chains of equations}\label{chains-of-equations}}
+
+Here we show how to support reasoning with chains of equations, as used
+throughout the book. We package the declarations into a module, named
+\texttt{≡-Reasoning}, to match the format used in Agda's standard
+library:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{module}\AgdaSpace{}%
+\AgdaModule{≡-Reasoning}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaKeyword{where}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaKeyword{infix}%
+\>[9]\AgdaNumber{1}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{begin\AgdaUnderscore{}}}\<%
+\\
+%
+\>[2]\AgdaKeyword{infixr}\AgdaSpace{}%
+\AgdaNumber{2}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{\AgdaUnderscore{}≡⟨⟩\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{\AgdaUnderscore{}≡⟨\AgdaUnderscore{}⟩\AgdaUnderscore{}}}\<%
+\\
+%
+\>[2]\AgdaKeyword{infix}%
+\>[9]\AgdaNumber{3}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{\AgdaUnderscore{}∎}}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+%
+\>[2]\AgdaOperator{\AgdaFunction{begin\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{x}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{→}%
+\>[194I]\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\\
+\>[.][@{}l@{}]\<[194I]%
+\>[6]\AgdaComment{-----}\<%
+\\
+%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{begin}}\AgdaSpace{}%
+\AgdaBound{x≡y}%
+\>[13]\AgdaSymbol{=}%
+\>[16]\AgdaBound{x≡y}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+%
+\>[2]\AgdaOperator{\AgdaFunction{\AgdaUnderscore{}≡⟨⟩\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{y}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{→}%
+\>[209I]\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\\
+\>[.][@{}l@{}]\<[209I]%
+\>[6]\AgdaComment{-----}\<%
+\\
+%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\\
+%
+\>[2]\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{≡⟨⟩}}\AgdaSpace{}%
+\AgdaBound{x≡y}%
+\>[13]\AgdaSymbol{=}%
+\>[16]\AgdaBound{x≡y}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+%
+\>[2]\AgdaOperator{\AgdaFunction{\AgdaUnderscore{}≡⟨\AgdaUnderscore{}⟩\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{y}\AgdaSpace{}%
+\AgdaBound{z}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\\
+%
+\>[4]\AgdaSymbol{→}%
+\>[229I]\AgdaBound{y}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{z}\<%
+\\
+\>[.][@{}l@{}]\<[229I]%
+\>[6]\AgdaComment{-----}\<%
+\\
+%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{z}\<%
+\\
+%
+\>[2]\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{≡⟨}}\AgdaSpace{}%
+\AgdaBound{x≡y}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{⟩}}\AgdaSpace{}%
+\AgdaBound{y≡z}%
+\>[18]\AgdaSymbol{=}%
+\>[21]\AgdaFunction{trans}\AgdaSpace{}%
+\AgdaBound{x≡y}\AgdaSpace{}%
+\AgdaBound{y≡z}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+%
+\>[2]\AgdaOperator{\AgdaFunction{\AgdaUnderscore{}∎}}%
+\>[241I]\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\<%
+\\
+\>[241I][@{}l@{\AgdaIndent{0}}]%
+\>[6]\AgdaComment{-----}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{x}\<%
+\\
+%
+\>[2]\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{∎}}%
+\>[7]\AgdaSymbol{=}%
+\>[10]\AgdaInductiveConstructor{refl}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaModule{≡-Reasoning}\<%
+\end{code}
+\end{fence}
+
+This is our first use of a nested module. It consists of the keyword
+\texttt{module} followed by the module name and any parameters, explicit
+or implicit, the keyword \texttt{where}, and the contents of the module
+indented. Modules may contain any sort of declaration, including other
+nested modules. Nested modules are similar to the top-level modules that
+constitute each chapter of this book, save that the body of a top-level
+module need not be indented. Opening the module makes all of the
+definitions available in the current environment.
+
+As an example, let's look at a proof of transitivity as a chain of
+equations:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{trans′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{x}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaBound{z}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}%
+\>[264I]\AgdaBound{y}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{z}\<%
+\\
+\>[.][@{}l@{}]\<[264I]%
+\>[4]\AgdaComment{-----}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{z}\<%
+\\
+\>[0]\AgdaFunction{trans′}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{x}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{y}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{z}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{x≡y}\AgdaSpace{}%
+\AgdaBound{y≡z}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaOperator{\AgdaFunction{begin}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaBound{x}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨}}\AgdaSpace{}%
+\AgdaBound{x≡y}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaBound{y}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨}}\AgdaSpace{}%
+\AgdaBound{y≡z}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaBound{z}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{∎}}\<%
+\end{code}
+\end{fence}
+
+According to the fixity declarations, the body parses as follows:
+
+\begin{myDisplay}
+begin (x ≡⟨ x≡y ⟩ (y ≡⟨ y≡z ⟩ (z ∎)))
+\end{myDisplay}
+
+The application of \texttt{begin} is purely cosmetic, as it simply
+returns its argument. That argument consists of \texttt{\_≡⟨\_⟩\_}
+applied to \texttt{x}, \texttt{x≡y}, and \texttt{y\ ≡⟨\ y≡z\ ⟩\ (z\ ∎)}.
+The first argument is a term, \texttt{x}, while the second and third
+arguments are both proofs of equations, in particular proofs of
+\texttt{x\ ≡\ y} and \texttt{y\ ≡\ z} respectively, which are combined
+by \texttt{trans} in the body of \texttt{\_≡⟨\_⟩\_} to yield a proof of
+\texttt{x\ ≡\ z}. The proof of \texttt{y\ ≡\ z} consists of
+\texttt{\_≡⟨\_⟩\_} applied to \texttt{y}, \texttt{y≡z}, and
+\texttt{z\ ∎}. The first argument is a term, \texttt{y}, while the
+second and third arguments are both proofs of equations, in particular
+proofs of \texttt{y\ ≡\ z} and \texttt{z\ ≡\ z} respectively, which are
+combined by \texttt{trans} in the body of \texttt{\_≡⟨\_⟩\_} to yield a
+proof of \texttt{y\ ≡\ z}. Finally, the proof of \texttt{z\ ≡\ z}
+consists of \texttt{\_∎} applied to the term \texttt{z}, which yields
+\texttt{refl}. After simplification, the body is equivalent to the term:
+
+\begin{myDisplay}
+trans x≡y (trans y≡z refl)
+\end{myDisplay}
+
+We could replace any use of a chain of equations by a chain of
+applications of \texttt{trans}; the result would be more compact but
+harder to read. The trick behind \texttt{∎} means that a chain of
+equalities simplifies to a chain of applications of \texttt{trans} that
+ends in \texttt{trans\ e\ refl}, where \texttt{e} is a term that proves
+some equality, even though \texttt{e} alone would do.
+
+\hypertarget{exercise-trans-and--reasoning-practice}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{trans} and
+\texttt{≡-Reasoning}
+(practice)}{Exercise trans and ≡-Reasoning (practice)}}\label{exercise-trans-and--reasoning-practice}}
+
+Sadly, we cannot use the definition of trans' using ≡-Reasoning as the
+definition for trans. Can you see why? (Hint: look at the definition of
+\texttt{\_≡⟨\_⟩\_})
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- Your code goes here}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{chains-of-equations-another-example}{%
+\section{Chains of equations, another
+example}\label{chains-of-equations-another-example}}
+
+As a second example of chains of equations, we repeat the proof that
+addition is commutative. We first repeat the definitions of naturals and
+addition. We cannot import them because (as noted at the beginning of
+this chapter) it would cause a conflict:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{data}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSpace{}%
+\AgdaKeyword{where}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaInductiveConstructor{zero}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\<%
+\\
+%
+\>[2]\AgdaInductiveConstructor{suc}%
+\>[7]\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0]\AgdaOperator{\AgdaFunction{\AgdaUnderscore{}+\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\<%
+\\
+\>[0]\AgdaInductiveConstructor{zero}%
+\>[8]\AgdaOperator{\AgdaFunction{+}}\AgdaSpace{}%
+\AgdaBound{n}%
+\>[13]\AgdaSymbol{=}%
+\>[16]\AgdaBound{n}\<%
+\\
+\>[0]\AgdaSymbol{(}\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{+}}\AgdaSpace{}%
+\AgdaBound{n}%
+\>[13]\AgdaSymbol{=}%
+\>[16]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+To save space we postulate (rather than prove in full) two lemmas:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{postulate}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaPostulate{+-identity}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{+}}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{m}\<%
+\\
+%
+\>[2]\AgdaPostulate{+-suc}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{+}}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+This is our first use of a \emph{postulate}. A postulate specifies a
+signature for an identifier but no definition. Here we postulate
+something proved earlier to save space. Postulates must be used with
+caution. If we postulate something false then we could use Agda to prove
+anything whatsoever.
+
+We then repeat the proof of commutativity:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{+-comm}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{+}}\AgdaSpace{}%
+\AgdaBound{m}\<%
+\\
+\>[0]\AgdaFunction{+-comm}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaOperator{\AgdaFunction{begin}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{+}}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨}}\AgdaSpace{}%
+\AgdaPostulate{+-identity}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaBound{m}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{zero}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{+}}\AgdaSpace{}%
+\AgdaBound{m}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{∎}}\<%
+\\
+\>[0]\AgdaFunction{+-comm}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaOperator{\AgdaFunction{begin}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{+}}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{n}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨}}\AgdaSpace{}%
+\AgdaPostulate{+-suc}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨}}\AgdaSpace{}%
+\AgdaFunction{cong}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{+-comm}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{+}}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSymbol{)}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{+}}\AgdaSpace{}%
+\AgdaBound{m}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{∎}}\<%
+\end{code}
+\end{fence}
+
+The reasoning here is similar to that in the preceding section. We use
+\texttt{\_≡⟨⟩\_} when no justification is required. One can think of
+\texttt{\_≡⟨⟩\_} as equivalent to \texttt{\_≡⟨\ refl\ ⟩\_}.
+
+Agda always treats a term as equivalent to its simplified term. The
+reason that one can write
+
+\begin{myDisplay}
+  suc (n + m)
+≡⟨⟩
+  suc n + m
+\end{myDisplay}
+
+is because Agda treats both terms as the same. This also means that one
+could instead interchange the lines and write
+
+\begin{myDisplay}
+  suc n + m
+≡⟨⟩
+  suc (n + m)
+\end{myDisplay}
+
+and Agda would not object. Agda only checks that the terms separated by
+\texttt{≡⟨⟩} have the same simplified form; it's up to us to write them
+in an order that will make sense to the reader.
+
+\hypertarget{exercise--reasoning-stretch}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{≤-Reasoning}
+(stretch)}{Exercise ≤-Reasoning (stretch)}}\label{exercise--reasoning-stretch}}
+
+The proof of monotonicity from Chapter
+\protect\hyperlink{Relations}{Relations} can be written in a more
+readable form by using an analogue of our notation for
+\texttt{≡-Reasoning}. Define \texttt{≤-Reasoning} analogously, and use
+it to write out an alternative proof that addition is monotonic with
+regard to inequality. Rewrite all of \texttt{+-monoˡ-≤},
+\texttt{+-monoʳ-≤}, and \texttt{+-mono-≤}.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- Your code goes here}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{rewriting}{%
+\section{Rewriting}\label{rewriting}}
+
+Consider a property of natural numbers, such as being even. We repeat
+the earlier definition:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{data}\AgdaSpace{}%
+\AgdaDatatype{even}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\<%
+\\
+\>[0]\AgdaKeyword{data}\AgdaSpace{}%
+\AgdaDatatype{odd}%
+\>[10]\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0]\AgdaKeyword{data}\AgdaSpace{}%
+\AgdaDatatype{even}\AgdaSpace{}%
+\AgdaKeyword{where}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaInductiveConstructor{even-zero}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{even}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+%
+\>[2]\AgdaInductiveConstructor{even-suc}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{\}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{→}%
+\>[399I]\AgdaDatatype{odd}\AgdaSpace{}%
+\AgdaBound{n}\<%
+\\
+\>[.][@{}l@{}]\<[399I]%
+\>[6]\AgdaComment{------------}\<%
+\\
+%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaDatatype{even}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0]\AgdaKeyword{data}\AgdaSpace{}%
+\AgdaDatatype{odd}\AgdaSpace{}%
+\AgdaKeyword{where}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaInductiveConstructor{odd-suc}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{\}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{→}%
+\>[411I]\AgdaDatatype{even}\AgdaSpace{}%
+\AgdaBound{n}\<%
+\\
+\>[.][@{}l@{}]\<[411I]%
+\>[6]\AgdaComment{-----------}\<%
+\\
+%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaDatatype{odd}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+In the previous section, we proved addition is commutative. Given
+evidence that \texttt{even\ (m\ +\ n)} holds, we ought also to be able
+to take that as evidence that \texttt{even\ (n\ +\ m)} holds.
+
+Agda includes special notation to support just this kind of reasoning,
+the \texttt{rewrite} notation we encountered earlier. To enable this
+notation, we use pragmas to tell Agda which type corresponds to
+equality:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaSymbol{\{-\#}\AgdaSpace{}%
+\AgdaKeyword{BUILTIN}\AgdaSpace{}%
+\AgdaKeyword{EQUALITY}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\AgdaUnderscore{}≡\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{\#-\}}\<%
+\end{code}
+\end{fence}
+
+We can then prove the desired property as follows:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{even-comm}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{)}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[426I]\AgdaDatatype{even}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\<%
+\\
+\>[.][@{}l@{}]\<[426I]%
+\>[4]\AgdaComment{------------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaDatatype{even}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{+}}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{even-comm}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaBound{ev}%
+\>[18]\AgdaKeyword{rewrite}\AgdaSpace{}%
+\AgdaFunction{+-comm}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaBound{m}%
+\>[38]\AgdaSymbol{=}%
+\>[41]\AgdaBound{ev}\<%
+\end{code}
+\end{fence}
+
+Here \texttt{ev} ranges over evidence that \texttt{even\ (m\ +\ n)}
+holds, and we show that it also provides evidence that
+\texttt{even\ (n\ +\ m)} holds. In general, the keyword \texttt{rewrite}
+is followed by evidence of an equality, and that equality is used to
+rewrite the type of the goal and of any variable in scope.
+
+It is instructive to develop \texttt{even-comm} interactively. To start,
+we supply variables for the arguments on the left, and a hole for the
+body on the right:
+
+\begin{myDisplay}
+even-comm : ∀ (m n : ℕ)
+  → even (m + n)
+    ------------
+  → even (n + m)
+even-comm m n ev = {! !}
+\end{myDisplay}
+
+If we go into the hole and type \texttt{C-c\ C-,} then Agda reports:
+
+\begin{myDisplay}
+Goal: even (n + m)
+————————————————————————————————————————————————————————————
+ev : even (m + n)
+n  : ℕ
+m  : ℕ
+\end{myDisplay}
+
+Now we add the rewrite:
+
+\begin{myDisplay}
+even-comm : ∀ (m n : ℕ)
+  → even (m + n)
+    ------------
+  → even (n + m)
+even-comm m n ev rewrite +-comm n m = {! !}
+\end{myDisplay}
+
+If we go into the hole again and type \texttt{C-c\ C-,} then Agda now
+reports:
+
+\begin{myDisplay}
+Goal: even (m + n)
+————————————————————————————————————————————————————————————
+ev : even (m + n)
+n  : ℕ
+m  : ℕ
+\end{myDisplay}
+
+The arguments have been swapped in the goal. Now it is trivial to see
+that \texttt{ev} satisfies the goal, and typing \texttt{C-c\ C-a} in the
+hole causes it to be filled with \texttt{ev}. The command
+\texttt{C-c\ C-a} performs an automated search, including checking
+whether a variable in scope has the same type as the goal.
+
+\hypertarget{multiple-rewrites}{%
+\section{Multiple rewrites}\label{multiple-rewrites}}
+
+One may perform multiple rewrites, each separated by a vertical bar. For
+instance, here is a second proof that addition is commutative, relying
+on rewrites rather than chains of equalities:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{+-comm′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{+}}\AgdaSpace{}%
+\AgdaBound{m}\<%
+\\
+\>[0]\AgdaFunction{+-comm′}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}%
+\>[16]\AgdaBound{n}%
+\>[19]\AgdaKeyword{rewrite}\AgdaSpace{}%
+\AgdaPostulate{+-identity}\AgdaSpace{}%
+\AgdaBound{n}%
+\>[52]\AgdaSymbol{=}%
+\>[55]\AgdaInductiveConstructor{refl}\<%
+\\
+\>[0]\AgdaFunction{+-comm′}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaBound{n}%
+\>[19]\AgdaKeyword{rewrite}\AgdaSpace{}%
+\AgdaPostulate{+-suc}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaSymbol{|}\AgdaSpace{}%
+\AgdaFunction{+-comm′}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}%
+\>[52]\AgdaSymbol{=}%
+\>[55]\AgdaInductiveConstructor{refl}\<%
+\end{code}
+\end{fence}
+
+This is far more compact. Among other things, whereas the previous proof
+required \texttt{cong\ suc\ (+-comm\ m\ n)} as the justification to
+invoke the inductive hypothesis, here it is sufficient to rewrite with
+\texttt{+-comm\ m\ n}, as rewriting automatically takes congruence into
+account. Although proofs with rewriting are shorter, proofs as chains of
+equalities are easier to follow, and we will stick with the latter when
+feasible.
+
+\hypertarget{rewriting-expanded}{%
+\section{Rewriting expanded}\label{rewriting-expanded}}
+
+The \texttt{rewrite} notation is in fact shorthand for an appropriate
+use of \texttt{with} abstraction:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{even-comm′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{)}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[473I]\AgdaDatatype{even}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\<%
+\\
+\>[.][@{}l@{}]\<[473I]%
+\>[4]\AgdaComment{------------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaDatatype{even}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{+}}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{even-comm′}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaBound{ev}\AgdaSpace{}%
+\AgdaKeyword{with}%
+\>[25]\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{+}}\AgdaSpace{}%
+\AgdaBound{n}%
+\>[32]\AgdaSymbol{|}\AgdaSpace{}%
+\AgdaFunction{+-comm}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\<%
+\\
+\>[0]\AgdaSymbol{...}%
+\>[21]\AgdaSymbol{|}\AgdaSpace{}%
+\AgdaDottedPattern{\AgdaSymbol{.(}}\AgdaDottedPattern{\AgdaBound{n}}\AgdaSpace{}%
+\AgdaDottedPattern{\AgdaOperator{\AgdaFunction{+}}}\AgdaSpace{}%
+\AgdaDottedPattern{\AgdaBound{m}}\AgdaDottedPattern{\AgdaSymbol{)}}\AgdaSpace{}%
+\AgdaSymbol{|}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}%
+\>[45]\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{ev}\<%
+\end{code}
+\end{fence}
+
+In general, one can follow \texttt{with} by any number of expressions,
+separated by bars, where each following equation has the same number of
+patterns. We often write expressions and the corresponding patterns so
+they line up in columns, as above. Here the first column asserts that
+\texttt{m\ +\ n} and \texttt{n\ +\ m} are identical, and the second
+column justifies that assertion with evidence of the appropriate
+equality. Note also the use of the \emph{dot pattern},
+\texttt{.(n\ +\ m)}. A dot pattern consists of a dot followed by an
+expression, and is used when other information forces the value matched
+to be equal to the value of the expression in the dot pattern. In this
+case, the identification of \texttt{m\ +\ n} and \texttt{n\ +\ m} is
+justified by the subsequent matching of \texttt{+-comm\ m\ n} against
+\texttt{refl}. One might think that the first clause is redundant as the
+information is inherent in the second clause, but in fact Agda is rather
+picky on this point: omitting the first clause or reversing the order of
+the clauses will cause Agda to report an error. (Try it and see!)
+
+In this case, we can avoid rewrite by simply applying the substitution
+function defined earlier:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{even-comm″}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{)}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[502I]\AgdaDatatype{even}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\<%
+\\
+\>[.][@{}l@{}]\<[502I]%
+\>[4]\AgdaComment{------------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaDatatype{even}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{+}}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{even-comm″}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}%
+\>[16]\AgdaSymbol{=}%
+\>[19]\AgdaFunction{subst}\AgdaSpace{}%
+\AgdaDatatype{even}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{+-comm}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+Nonetheless, rewrite is a vital part of the Agda toolkit. We will use it
+sparingly, but it is occasionally essential.
+
+\hypertarget{leibniz-equality}{%
+\section{Leibniz equality}\label{leibniz-equality}}
+
+The form of asserting equality that we have used is due to Martin-Löf,
+and was published in 1975. An older form is due to Leibniz, and was
+published in 1686. Leibniz asserted the \emph{identity of
+indiscernibles}: two objects are equal if and only if they satisfy the
+same properties. This principle sometimes goes by the name Leibniz' Law,
+and is closely related to Spock's Law, ``A difference that makes no
+difference is no difference''. Here we define Leibniz equality, and show
+that two terms satisfy Leibniz equality if and only if they satisfy
+Martin-Löf equality.
+
+Leibniz equality is usually formalised to state that \texttt{x\ ≐\ y}
+holds if every property \texttt{P} that holds of \texttt{x} also holds
+of \texttt{y}. Perhaps surprisingly, this definition is sufficient to
+also ensure the converse, that every property \texttt{P} that holds of
+\texttt{y} also holds of \texttt{x}.
+
+Let \texttt{x} and \texttt{y} be objects of type \texttt{A}. We say that
+\texttt{x\ ≐\ y} holds if for every predicate \texttt{P} over type
+\texttt{A} we have that \texttt{P\ x} implies \texttt{P\ y}:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaOperator{\AgdaFunction{\AgdaUnderscore{}≐\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{x}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set₁}\<%
+\\
+\>[0]\AgdaOperator{\AgdaFunction{\AgdaUnderscore{}≐\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{P}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{P}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{P}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\end{code}
+\end{fence}
+
+We cannot write the left-hand side of the equation as \texttt{x\ ≐\ y},
+and instead we write \texttt{\_≐\_\ \{A\}\ x\ y} to provide access to
+the implicit parameter \texttt{A} which appears on the right-hand side.
+
+This is our first use of \emph{levels}. We cannot assign \texttt{Set}
+the type \texttt{Set}, since this would lead to contradictions such as
+Russell's Paradox and Girard's Paradox. Instead, there is a hierarchy of
+types, where \texttt{Set\ :\ Set₁}, \texttt{Set₁\ :\ Set₂}, and so on.
+In fact, \texttt{Set} itself is just an abbreviation for \texttt{Set₀}.
+Since the equation defining \texttt{\_≐\_} mentions \texttt{Set} on the
+right-hand side, the corresponding signature must use \texttt{Set₁}. We
+say a bit more about levels below.
+
+Leibniz equality is reflexive and transitive, where the first follows by
+a variant of the identity function and the second by a variant of
+function composition:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{refl-≐}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{≐}}\AgdaSpace{}%
+\AgdaBound{x}\<%
+\\
+\>[0]\AgdaFunction{refl-≐}\AgdaSpace{}%
+\AgdaBound{P}\AgdaSpace{}%
+\AgdaBound{Px}%
+\>[13]\AgdaSymbol{=}%
+\>[16]\AgdaBound{Px}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0]\AgdaFunction{trans-≐}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{x}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaBound{z}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{≐}}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}%
+\>[569I]\AgdaBound{y}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{≐}}\AgdaSpace{}%
+\AgdaBound{z}\<%
+\\
+\>[.][@{}l@{}]\<[569I]%
+\>[4]\AgdaComment{-----}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{≐}}\AgdaSpace{}%
+\AgdaBound{z}\<%
+\\
+\>[0]\AgdaFunction{trans-≐}\AgdaSpace{}%
+\AgdaBound{x≐y}\AgdaSpace{}%
+\AgdaBound{y≐z}\AgdaSpace{}%
+\AgdaBound{P}\AgdaSpace{}%
+\AgdaBound{Px}%
+\>[22]\AgdaSymbol{=}%
+\>[25]\AgdaBound{y≐z}\AgdaSpace{}%
+\AgdaBound{P}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{x≐y}\AgdaSpace{}%
+\AgdaBound{P}\AgdaSpace{}%
+\AgdaBound{Px}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+Symmetry is less obvious. We have to show that if \texttt{P\ x} implies
+\texttt{P\ y} for all predicates \texttt{P}, then the implication holds
+the other way round as well:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{sym-≐}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{x}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[592I]\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{≐}}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\\
+\>[.][@{}l@{}]\<[592I]%
+\>[4]\AgdaComment{-----}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{≐}}\AgdaSpace{}%
+\AgdaBound{x}\<%
+\\
+\>[0]\AgdaFunction{sym-≐}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{x}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{y}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{x≐y}\AgdaSpace{}%
+\AgdaBound{P}%
+\>[25]\AgdaSymbol{=}%
+\>[28]\AgdaFunction{Qy}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaKeyword{where}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaFunction{Q}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\<%
+\\
+%
+\>[4]\AgdaFunction{Q}\AgdaSpace{}%
+\AgdaBound{z}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{P}\AgdaSpace{}%
+\AgdaBound{z}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{P}\AgdaSpace{}%
+\AgdaBound{x}\<%
+\\
+%
+\>[4]\AgdaFunction{Qx}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaFunction{Q}\AgdaSpace{}%
+\AgdaBound{x}\<%
+\\
+%
+\>[4]\AgdaFunction{Qx}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaFunction{refl-≐}\AgdaSpace{}%
+\AgdaBound{P}\<%
+\\
+%
+\>[4]\AgdaFunction{Qy}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaFunction{Q}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\\
+%
+\>[4]\AgdaFunction{Qy}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{x≐y}\AgdaSpace{}%
+\AgdaFunction{Q}\AgdaSpace{}%
+\AgdaFunction{Qx}\<%
+\end{code}
+\end{fence}
+
+Given \texttt{x\ ≐\ y}, a specific \texttt{P}, we have to construct a
+proof that \texttt{P\ y} implies \texttt{P\ x}. To do so, we instantiate
+the equality with a predicate \texttt{Q} such that \texttt{Q\ z} holds
+if \texttt{P\ z} implies \texttt{P\ x}. The property \texttt{Q\ x} is
+trivial by reflexivity, and hence \texttt{Q\ y} follows from
+\texttt{x\ ≐\ y}. But \texttt{Q\ y} is exactly a proof of what we
+require, that \texttt{P\ y} implies \texttt{P\ x}.
+
+We now show that Martin-Löf equality implies Leibniz equality, and vice
+versa. In the forward direction, if we know \texttt{x\ ≡\ y} we need for
+any \texttt{P} to take evidence of \texttt{P\ x} to evidence of
+\texttt{P\ y}, which is easy since equality of \texttt{x} and \texttt{y}
+implies that any proof of \texttt{P\ x} is also a proof of
+\texttt{P\ y}:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{≡-implies-≐}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{x}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[636I]\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\\
+\>[.][@{}l@{}]\<[636I]%
+\>[4]\AgdaComment{-----}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{≐}}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\\
+\>[0]\AgdaFunction{≡-implies-≐}\AgdaSpace{}%
+\AgdaBound{x≡y}\AgdaSpace{}%
+\AgdaBound{P}%
+\>[19]\AgdaSymbol{=}%
+\>[22]\AgdaFunction{subst}\AgdaSpace{}%
+\AgdaBound{P}\AgdaSpace{}%
+\AgdaBound{x≡y}\<%
+\end{code}
+\end{fence}
+
+This direction follows from substitution, which we showed earlier.
+
+In the reverse direction, given that for any \texttt{P} we can take a
+proof of \texttt{P\ x} to a proof of \texttt{P\ y} we need to show
+\texttt{x\ ≡\ y}:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{≐-implies-≡}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{x}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[655I]\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{≐}}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\\
+\>[.][@{}l@{}]\<[655I]%
+\>[4]\AgdaComment{-----}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\\
+\>[0]\AgdaFunction{≐-implies-≡}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{x}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{y}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{x≐y}%
+\>[29]\AgdaSymbol{=}%
+\>[32]\AgdaFunction{Qy}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaKeyword{where}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaFunction{Q}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\<%
+\\
+%
+\>[4]\AgdaFunction{Q}\AgdaSpace{}%
+\AgdaBound{z}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{z}\<%
+\\
+%
+\>[4]\AgdaFunction{Qx}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaFunction{Q}\AgdaSpace{}%
+\AgdaBound{x}\<%
+\\
+%
+\>[4]\AgdaFunction{Qx}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\<%
+\\
+%
+\>[4]\AgdaFunction{Qy}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaFunction{Q}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\\
+%
+\>[4]\AgdaFunction{Qy}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{x≐y}\AgdaSpace{}%
+\AgdaFunction{Q}\AgdaSpace{}%
+\AgdaFunction{Qx}\<%
+\end{code}
+\end{fence}
+
+The proof is similar to that for symmetry of Leibniz equality. We take
+\texttt{Q} to be the predicate that holds of \texttt{z} if
+\texttt{x\ ≡\ z}. Then \texttt{Q\ x} is trivial by reflexivity of
+Martin-Löf equality, and hence \texttt{Q\ y} follows from
+\texttt{x\ ≐\ y}. But \texttt{Q\ y} is exactly a proof of what we
+require, that \texttt{x\ ≡\ y}.
+
+(Parts of this section are adapted from \emph{≐≃≡: Leibniz Equality is
+Isomorphic to Martin-Löf Identity, Parametrically}, by Andreas Abel,
+Jesper Cockx, Dominique Devries, Andreas Nuyts, and Philip Wadler,
+draft, 2017.)
+
+\hypertarget{Equality-unipoly}{%
+\section{Universe polymorphism}\label{Equality-unipoly}}
+
+As we have seen, not every type belongs to \texttt{Set}, but instead
+every type belongs somewhere in the hierarchy \texttt{Set₀},
+\texttt{Set₁}, \texttt{Set₂}, and so on, where \texttt{Set} abbreviates
+\texttt{Set₀}, and \texttt{Set₀\ :\ Set₁}, \texttt{Set₁\ :\ Set₂}, and
+so on. The definition of equality given above is fine if we want to
+compare two values of a type that belongs to \texttt{Set}, but what if
+we want to compare two values of a type that belongs to \texttt{Set\ ℓ}
+for some arbitrary level \texttt{ℓ}?
+
+The answer is \emph{universe polymorphism}, where a definition is made
+with respect to an arbitrary level \texttt{ℓ}. To make use of levels, we
+first import the following:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{Level}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaPostulate{Level}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{\AgdaUnderscore{}⊔\AgdaUnderscore{}}}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaKeyword{renaming}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaPrimitive{zero}\AgdaSpace{}%
+\AgdaSymbol{to}\AgdaSpace{}%
+\AgdaPrimitive{lzero}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaPrimitive{suc}\AgdaSpace{}%
+\AgdaSymbol{to}\AgdaSpace{}%
+\AgdaPrimitive{lsuc}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+We rename constructors \texttt{zero} and \texttt{suc} to \texttt{lzero}
+and \texttt{lsuc} to avoid confusion between levels and naturals.
+
+Levels are isomorphic to natural numbers, and have similar constructors:
+
+\begin{myDisplay}
+lzero : Level
+lsuc  : Level → Level
+\end{myDisplay}
+
+The names \texttt{Set₀}, \texttt{Set₁}, \texttt{Set₂}, and so on, are
+abbreviations for
+
+\begin{myDisplay}
+Set lzero
+Set (lsuc lzero)
+Set (lsuc (lsuc lzero))
+\end{myDisplay}
+
+and so on. There is also an operator
+
+\begin{myDisplay}
+_⊔_ : Level → Level → Level
+\end{myDisplay}
+
+that given two levels returns the larger of the two.
+
+Here is the definition of equality, generalised to an arbitrary level:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{data}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\AgdaUnderscore{}≡′\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{ℓ}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPostulate{Level}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSpace{}%
+\AgdaBound{ℓ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSpace{}%
+\AgdaBound{ℓ}\AgdaSpace{}%
+\AgdaKeyword{where}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaInductiveConstructor{refl′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡′}}\AgdaSpace{}%
+\AgdaBound{x}\<%
+\end{code}
+\end{fence}
+
+Similarly, here is the generalised definition of symmetry:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{sym′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{ℓ}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPostulate{Level}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSpace{}%
+\AgdaBound{ℓ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{x}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[732I]\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡′}}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\\
+\>[.][@{}l@{}]\<[732I]%
+\>[4]\AgdaComment{------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡′}}\AgdaSpace{}%
+\AgdaBound{x}\<%
+\\
+\>[0]\AgdaFunction{sym′}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl′}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl′}\<%
+\end{code}
+\end{fence}
+
+For simplicity, we avoid universe polymorphism in the definitions given
+in the text, but most definitions in the standard library, including
+those for equality, are generalised to arbitrary levels as above.
+
+Here is the generalised definition of Leibniz equality:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaOperator{\AgdaFunction{\AgdaUnderscore{}≐′\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{ℓ}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPostulate{Level}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSpace{}%
+\AgdaBound{ℓ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{x}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaPrimitive{lsuc}\AgdaSpace{}%
+\AgdaBound{ℓ}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaOperator{\AgdaFunction{\AgdaUnderscore{}≐′\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{ℓ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{P}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSpace{}%
+\AgdaBound{ℓ}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{P}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{P}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\end{code}
+\end{fence}
+
+Before the signature used \texttt{Set₁} as the type of a term that
+includes \texttt{Set}, whereas here the signature uses
+\texttt{Set\ (lsuc\ ℓ)} as the type of a term that includes
+\texttt{Set\ ℓ}.
+
+Most other functions in the standard library are also generalised to
+arbitrary levels. For instance, here is the definition of composition.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaOperator{\AgdaFunction{\AgdaUnderscore{}∘\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{ℓ₁}\AgdaSpace{}%
+\AgdaBound{ℓ₂}\AgdaSpace{}%
+\AgdaBound{ℓ₃}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPostulate{Level}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSpace{}%
+\AgdaBound{ℓ₁}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{B}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSpace{}%
+\AgdaBound{ℓ₂}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{C}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSpace{}%
+\AgdaBound{ℓ₃}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{B}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{C}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{C}\<%
+\\
+\>[0]\AgdaSymbol{(}\AgdaBound{g}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{∘}}\AgdaSpace{}%
+\AgdaBound{f}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaBound{x}%
+\>[11]\AgdaSymbol{=}%
+\>[14]\AgdaBound{g}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{f}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+Further information on levels can be found in the
+\href{https://agda.readthedocs.io/en/v2.6.1/language/universe-levels.html}{Agda
+docs}.
+
+\hypertarget{standard-library}{%
+\section{Standard library}\label{standard-library}}
+
+Definitions similar to those in this chapter can be found in the
+standard library. The Agda standard library defines \texttt{\_≡⟨\_⟩\_}
+as \texttt{step-≡},
+\href{https://github.com/agda/agda-stdlib/blob/master/CHANGELOG/v1.3.md\#changes-to-how-equational-reasoning-is-implemented}{which
+reverses the order of the arguments}. The standard library also defines
+a syntax macro, which is automatically imported whenever you import
+\texttt{step-≡}, which recovers the original argument order:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- import Relation.Binary.PropositionalEquality as Eq}\<%
+\\
+\>[0]\AgdaComment{-- open Eq using (\AgdaUnderscore{}≡\AgdaUnderscore{}; refl; trans; sym; cong; cong-app; subst)}\<%
+\\
+\>[0]\AgdaComment{-- open Eq.≡-Reasoning using (begin\AgdaUnderscore{}; \AgdaUnderscore{}≡⟨⟩\AgdaUnderscore{}; step-≡; \AgdaUnderscore{}∎)}\<%
+\end{code}
+\end{fence}
+
+Here the imports are shown as comments rather than code to avoid
+collisions, as mentioned in the introduction.
+
+\hypertarget{unicode}{%
+\section{Unicode}\label{unicode}}
+
+This chapter uses the following unicode:
+
+\begin{myDisplay}
+≡  U+2261  IDENTICAL TO (\==, \equiv)
+⟨  U+27E8  MATHEMATICAL LEFT ANGLE BRACKET (\<)
+⟩  U+27E9  MATHEMATICAL RIGHT ANGLE BRACKET (\>)
+∎  U+220E  END OF PROOF (\qed)
+≐  U+2250  APPROACHES THE LIMIT (\.=)
+ℓ  U+2113  SCRIPT SMALL L (\ell)
+⊔  U+2294  SQUARE CUP (\lub)
+₀  U+2080  SUBSCRIPT ZERO (\_0)
+₁  U+2081  SUBSCRIPT ONE (\_1)
+₂  U+2082  SUBSCRIPT TWO (\_2)
+\end{myDisplay}
+

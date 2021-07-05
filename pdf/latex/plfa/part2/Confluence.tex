@@ -1,0 +1,2323 @@
+\hypertarget{Confluence}{%
+\chapter{Confluence: Confluence of untyped lambda
+calculus}\label{Confluence}}
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{module}\AgdaSpace{}%
+\AgdaModule{plfa.part2.Confluence}\AgdaSpace{}%
+\AgdaKeyword{where}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{introduction}{%
+\section{Introduction}\label{introduction}}
+
+In this chapter we prove that beta reduction is \emph{confluent}, a
+property also known as \emph{Church-Rosser}. That is, if there are
+reduction sequences from any term \texttt{L} to two different terms
+\texttt{M₁} and \texttt{M₂}, then there exist reduction sequences from
+those two terms to some common term \texttt{N}. In pictures:
+
+\begin{myDisplay}
+    L
+   / \
+  /   \
+ /     \
+M₁      M₂
+ \     /
+  \   /
+   \ /
+    N
+\end{myDisplay}
+
+where downward lines are instances of \texttt{—↠}.
+
+Confluence is studied in many other kinds of rewrite systems besides the
+lambda calculus, and it is well known how to prove confluence in rewrite
+systems that enjoy the \emph{diamond property}, a single-step version of
+confluence. Let \texttt{⇛} be a relation. Then \texttt{⇛} has the
+diamond property if whenever \texttt{L\ ⇛\ M₁} and \texttt{L\ ⇛\ M₂},
+then there exists an \texttt{N} such that \texttt{M₁\ ⇛\ N} and
+\texttt{M₂\ ⇛\ N}. This is just an instance of the same picture above,
+where downward lines are now instance of \texttt{⇛}. If we write
+\texttt{⇛*} for the reflexive and transitive closure of \texttt{⇛}, then
+confluence of \texttt{⇛*} follows immediately from the diamond property.
+
+Unfortunately, reduction in the lambda calculus does not satisfy the
+diamond property. Here is a counter example.
+
+\begin{myDisplay}
+(λ x. x x)((λ x. x) a) —→ (λ x. x x) a
+(λ x. x x)((λ x. x) a) —→ ((λ x. x) a) ((λ x. x) a)
+\end{myDisplay}
+
+Both terms can reduce to \texttt{a\ a}, but the second term requires two
+steps to get there, not one.
+
+To side-step this problem, we'll define an auxiliary reduction relation,
+called \emph{parallel reduction}, that can perform many reductions
+simultaneously and thereby satisfy the diamond property. Furthermore, we
+show that a parallel reduction sequence exists between any two terms if
+and only if a beta reduction sequence exists between them. Thus, we can
+reduce the proof of confluence for beta reduction to confluence for
+parallel reduction.
+
+\hypertarget{imports}{%
+\section{Imports}\label{imports}}
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{Relation.Binary.PropositionalEquality}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaDatatype{\AgdaUnderscore{}≡\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{Function}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaFunction{\AgdaUnderscore{}∘\AgdaUnderscore{}}}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{Data.Product}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaFunction{\AgdaUnderscore{}×\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaRecord{Σ}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaFunction{Σ-syntax}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaFunction{∃}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaFunction{∃-syntax}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaField{proj₁}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaField{proj₂}\AgdaSymbol{)}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaKeyword{renaming}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaInductiveConstructor{\AgdaUnderscore{},\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{to}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨\AgdaUnderscore{},\AgdaUnderscore{}⟩}}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{plfa.part2.Substitution}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{Rename}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaFunction{Subst}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{plfa.part2.Untyped}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaDatatype{\AgdaUnderscore{}—→\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaInductiveConstructor{β}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaInductiveConstructor{ξ₁}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaInductiveConstructor{ξ₂}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaInductiveConstructor{ζ}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\AgdaUnderscore{}—↠\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{begin\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{\AgdaUnderscore{}—→⟨\AgdaUnderscore{}⟩\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{\AgdaUnderscore{}—↠⟨\AgdaUnderscore{}⟩\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{\AgdaUnderscore{}∎}}\AgdaSymbol{;}\<%
+\\
+%
+\>[2]\AgdaFunction{abs-cong}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaFunction{appL-cong}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaFunction{appR-cong}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaFunction{—↠-trans}\AgdaSymbol{;}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaDatatype{\AgdaUnderscore{}⊢\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\AgdaUnderscore{}∋\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{`\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{\#\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{\AgdaUnderscore{},\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaInductiveConstructor{★}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{ƛ\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{\AgdaUnderscore{}·\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{\AgdaUnderscore{}[\AgdaUnderscore{}]}}\AgdaSymbol{;}\<%
+\\
+%
+\>[2]\AgdaFunction{rename}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaFunction{ext}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaFunction{exts}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaInductiveConstructor{Z}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{S\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaFunction{subst}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaFunction{subst-zero}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{parallel-reduction}{%
+\section{Parallel Reduction}\label{parallel-reduction}}
+
+The parallel reduction relation is defined as follows.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{infix}\AgdaSpace{}%
+\AgdaNumber{2}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\AgdaUnderscore{}⇛\AgdaUnderscore{}}}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0]\AgdaKeyword{data}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\AgdaUnderscore{}⇛\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSpace{}%
+\AgdaKeyword{where}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaInductiveConstructor{pvar}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}\{}\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{∋}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[6]\AgdaComment{---------}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaInductiveConstructor{`}}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaInductiveConstructor{`}}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+%
+\>[2]\AgdaInductiveConstructor{pabs}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀\{}\AgdaBound{Γ}\AgdaSymbol{\}\{}\AgdaBound{N}\AgdaSpace{}%
+\AgdaBound{N′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaInductiveConstructor{★}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaInductiveConstructor{★}\AgdaSymbol{\}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{→}%
+\>[97I]\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{N′}\<%
+\\
+\>[.][@{}l@{}]\<[97I]%
+\>[6]\AgdaComment{----------}\<%
+\\
+%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{ƛ}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{ƛ}}\AgdaSpace{}%
+\AgdaBound{N′}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+%
+\>[2]\AgdaInductiveConstructor{papp}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀\{}\AgdaBound{Γ}\AgdaSymbol{\}\{}\AgdaBound{L}\AgdaSpace{}%
+\AgdaBound{L′}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaBound{M′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaInductiveConstructor{★}\AgdaSymbol{\}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{L′}\<%
+\\
+%
+\>[4]\AgdaSymbol{→}%
+\>[117I]\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{M′}\<%
+\\
+\>[.][@{}l@{}]\<[117I]%
+\>[6]\AgdaComment{-----------------}\<%
+\\
+%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{·}}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{L′}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{·}}\AgdaSpace{}%
+\AgdaBound{M′}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+%
+\>[2]\AgdaInductiveConstructor{pbeta}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀\{}\AgdaBound{Γ}\AgdaSymbol{\}\{}\AgdaBound{N}\AgdaSpace{}%
+\AgdaBound{N′}%
+\>[21]\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaInductiveConstructor{★}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaInductiveConstructor{★}\AgdaSymbol{\}\{}\AgdaBound{M}\AgdaSpace{}%
+\AgdaBound{M′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaInductiveConstructor{★}\AgdaSymbol{\}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{N′}\<%
+\\
+%
+\>[4]\AgdaSymbol{→}%
+\>[143I]\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{M′}\<%
+\\
+\>[.][@{}l@{}]\<[143I]%
+\>[6]\AgdaComment{-----------------------}\<%
+\\
+%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaInductiveConstructor{ƛ}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{·}}\AgdaSpace{}%
+\AgdaBound{M}%
+\>[17]\AgdaOperator{\AgdaDatatype{⇛}}%
+\>[20]\AgdaBound{N′}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{[}}\AgdaSpace{}%
+\AgdaBound{M′}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{]}}\<%
+\end{code}
+\end{fence}
+
+The first three rules are congruences that reduce each of their parts
+simultaneously. The last rule reduces a lambda term and term in parallel
+followed by a beta step.
+
+We remark that the \texttt{pabs}, \texttt{papp}, and \texttt{pbeta}
+rules perform reduction on all their subexpressions simultaneously.
+Also, the \texttt{pabs} rule is akin to the \texttt{ζ} rule and
+\texttt{pbeta} is akin to \texttt{β}.
+
+Parallel reduction is reflexive.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{par-refl}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}\{}\AgdaBound{M}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{M}\<%
+\\
+\>[0]\AgdaFunction{par-refl}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaOperator{\AgdaInductiveConstructor{`}}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{pvar}\<%
+\\
+\>[0]\AgdaFunction{par-refl}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaInductiveConstructor{★}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaOperator{\AgdaInductiveConstructor{ƛ}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{pabs}\AgdaSpace{}%
+\AgdaFunction{par-refl}\<%
+\\
+\>[0]\AgdaFunction{par-refl}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaInductiveConstructor{★}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{·}}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{papp}\AgdaSpace{}%
+\AgdaFunction{par-refl}\AgdaSpace{}%
+\AgdaFunction{par-refl}\<%
+\end{code}
+\end{fence}
+
+We define the sequences of parallel reduction as follows.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{infix}%
+\>[7]\AgdaNumber{2}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\AgdaUnderscore{}⇛*\AgdaUnderscore{}}}\<%
+\\
+\>[0]\AgdaKeyword{infixr}\AgdaSpace{}%
+\AgdaNumber{2}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{\AgdaUnderscore{}⇛⟨\AgdaUnderscore{}⟩\AgdaUnderscore{}}}\<%
+\\
+\>[0]\AgdaKeyword{infix}%
+\>[7]\AgdaNumber{3}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{\AgdaUnderscore{}∎}}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0]\AgdaKeyword{data}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\AgdaUnderscore{}⇛*\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSpace{}%
+\AgdaKeyword{where}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaOperator{\AgdaInductiveConstructor{\AgdaUnderscore{}∎}}%
+\>[206I]\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{M}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\<%
+\\
+\>[206I][@{}l@{\AgdaIndent{0}}]%
+\>[6]\AgdaComment{--------}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛*}}\AgdaSpace{}%
+\AgdaBound{M}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+%
+\>[2]\AgdaOperator{\AgdaInductiveConstructor{\AgdaUnderscore{}⇛⟨\AgdaUnderscore{}⟩\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{L}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{M}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{M}\<%
+\\
+%
+\>[4]\AgdaSymbol{→}%
+\>[236I]\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛*}}\AgdaSpace{}%
+\AgdaBound{N}\<%
+\\
+\>[.][@{}l@{}]\<[236I]%
+\>[6]\AgdaComment{---------}\<%
+\\
+%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛*}}\AgdaSpace{}%
+\AgdaBound{N}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{exercise-par-diamond-eg-practice}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{par-diamond-eg}
+(practice)}{Exercise par-diamond-eg (practice)}}\label{exercise-par-diamond-eg-practice}}
+
+Revisit the counter example to the diamond property for reduction by
+showing that the diamond property holds for parallel reduction in that
+case.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- Your code goes here}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{equivalence-between-parallel-reduction-and-reduction}{%
+\section{Equivalence between parallel reduction and
+reduction}\label{equivalence-between-parallel-reduction-and-reduction}}
+
+Here we prove that for any \texttt{M} and \texttt{N}, \texttt{M\ ⇛*\ N}
+if and only if \texttt{M\ —↠\ N}. The only-if direction is particularly
+easy. We start by showing that if \texttt{M\ —→\ N}, then
+\texttt{M\ ⇛\ N}. The proof is by induction on the reduction
+\texttt{M\ —→\ N}.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{beta-par}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}\{}\AgdaBound{M}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[250I]\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{—→}}\AgdaSpace{}%
+\AgdaBound{N}\<%
+\\
+\>[.][@{}l@{}]\<[250I]%
+\>[4]\AgdaComment{------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{N}\<%
+\\
+\>[0]\AgdaFunction{beta-par}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaInductiveConstructor{★}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{·}}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{ξ₁}\AgdaSpace{}%
+\AgdaBound{r}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{papp}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{beta-par}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaArgument{M}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{L}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{r}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaFunction{par-refl}\<%
+\\
+\>[0]\AgdaFunction{beta-par}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaInductiveConstructor{★}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{·}}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{ξ₂}\AgdaSpace{}%
+\AgdaBound{r}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{papp}\AgdaSpace{}%
+\AgdaFunction{par-refl}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{beta-par}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaArgument{M}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{r}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{beta-par}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaInductiveConstructor{★}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{(}\AgdaOperator{\AgdaInductiveConstructor{ƛ}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{·}}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaInductiveConstructor{β}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{pbeta}\AgdaSpace{}%
+\AgdaFunction{par-refl}\AgdaSpace{}%
+\AgdaFunction{par-refl}\<%
+\\
+\>[0]\AgdaFunction{beta-par}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaInductiveConstructor{★}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaOperator{\AgdaInductiveConstructor{ƛ}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{ζ}\AgdaSpace{}%
+\AgdaBound{r}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{pabs}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{beta-par}\AgdaSpace{}%
+\AgdaBound{r}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+With this lemma in hand we complete the only-if direction, that
+\texttt{M\ —↠\ N} implies \texttt{M\ ⇛*\ N}. The proof is a
+straightforward induction on the reduction sequence \texttt{M\ —↠\ N}.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{betas-pars}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{M}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[316I]\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{—↠}}\AgdaSpace{}%
+\AgdaBound{N}\<%
+\\
+\>[.][@{}l@{}]\<[316I]%
+\>[4]\AgdaComment{------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛*}}\AgdaSpace{}%
+\AgdaBound{N}\<%
+\\
+\>[0]\AgdaFunction{betas-pars}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{M₁}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaDottedPattern{\AgdaSymbol{.}}\AgdaDottedPattern{\AgdaBound{M₁}}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{M₁}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{∎}}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{M₁}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{∎}}\<%
+\\
+\>[0]\AgdaFunction{betas-pars}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaDottedPattern{\AgdaSymbol{.}}\AgdaDottedPattern{\AgdaBound{L}}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{N}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{—→⟨}}\AgdaSpace{}%
+\AgdaBound{b}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaBound{bs}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[3]\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⇛⟨}}\AgdaSpace{}%
+\AgdaFunction{beta-par}\AgdaSpace{}%
+\AgdaBound{b}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaFunction{betas-pars}\AgdaSpace{}%
+\AgdaBound{bs}\<%
+\end{code}
+\end{fence}
+
+Now for the other direction, that \texttt{M\ ⇛*\ N} implies
+\texttt{M\ —↠\ N}. The proof of this direction is a bit different
+because it's not the case that \texttt{M\ ⇛\ N} implies
+\texttt{M\ —→\ N}. After all, \texttt{M\ ⇛\ N} performs many reductions.
+So instead we shall prove that \texttt{M\ ⇛\ N} implies
+\texttt{M\ —↠\ N}.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{par-betas}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}\{}\AgdaBound{M}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[355I]\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{N}\<%
+\\
+\>[.][@{}l@{}]\<[355I]%
+\>[4]\AgdaComment{------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{—↠}}\AgdaSpace{}%
+\AgdaBound{N}\<%
+\\
+\>[0]\AgdaFunction{par-betas}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaDottedPattern{\AgdaSymbol{.(}}\AgdaDottedPattern{\AgdaOperator{\AgdaInductiveConstructor{`}}}\AgdaSpace{}%
+\AgdaDottedPattern{\AgdaSymbol{\AgdaUnderscore{})}}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{pvar}\AgdaSymbol{\{}\AgdaArgument{x}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{\})}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaInductiveConstructor{`}}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{∎}}\<%
+\\
+\>[0]\AgdaFunction{par-betas}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaInductiveConstructor{★}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaOperator{\AgdaInductiveConstructor{ƛ}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{pabs}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaFunction{abs-cong}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{par-betas}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{par-betas}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaInductiveConstructor{★}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{·}}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{papp}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaArgument{L}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{L}\AgdaSymbol{\}\{}\AgdaBound{L′}\AgdaSymbol{\}\{}\AgdaBound{M}\AgdaSymbol{\}\{}\AgdaBound{M′}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{p₁}\AgdaSpace{}%
+\AgdaBound{p₂}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaOperator{\AgdaFunction{begin}}\<%
+\\
+%
+\>[4]\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{·}}\AgdaSpace{}%
+\AgdaBound{M}%
+\>[12]\AgdaOperator{\AgdaFunction{—↠⟨}}\AgdaSpace{}%
+\AgdaFunction{appL-cong}\AgdaSymbol{\{}\AgdaArgument{M}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{par-betas}\AgdaSpace{}%
+\AgdaBound{p₁}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{⟩}}\<%
+\\
+%
+\>[4]\AgdaBound{L′}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{·}}\AgdaSpace{}%
+\AgdaBound{M}%
+\>[12]\AgdaOperator{\AgdaFunction{—↠⟨}}\AgdaSpace{}%
+\AgdaFunction{appR-cong}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{par-betas}\AgdaSpace{}%
+\AgdaBound{p₂}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{⟩}}\<%
+\\
+%
+\>[4]\AgdaBound{L′}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{·}}\AgdaSpace{}%
+\AgdaBound{M′}\<%
+\\
+%
+\>[4]\AgdaOperator{\AgdaInductiveConstructor{∎}}\<%
+\\
+\>[0]\AgdaFunction{par-betas}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaInductiveConstructor{★}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{(}\AgdaOperator{\AgdaInductiveConstructor{ƛ}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{·}}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{pbeta}\AgdaSymbol{\{}\AgdaArgument{N′}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{N′}\AgdaSymbol{\}\{}\AgdaArgument{M′}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{M′}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{p₁}\AgdaSpace{}%
+\AgdaBound{p₂}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaOperator{\AgdaFunction{begin}}\<%
+\\
+%
+\>[4]\AgdaSymbol{(}\AgdaOperator{\AgdaInductiveConstructor{ƛ}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{·}}\AgdaSpace{}%
+\AgdaBound{M}%
+\>[33]\AgdaOperator{\AgdaFunction{—↠⟨}}\AgdaSpace{}%
+\AgdaFunction{appL-cong}\AgdaSymbol{\{}\AgdaArgument{M}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{abs-cong}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{par-betas}\AgdaSpace{}%
+\AgdaBound{p₁}\AgdaSymbol{))}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{⟩}}\<%
+\\
+%
+\>[4]\AgdaSymbol{(}\AgdaOperator{\AgdaInductiveConstructor{ƛ}}\AgdaSpace{}%
+\AgdaBound{N′}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{·}}\AgdaSpace{}%
+\AgdaBound{M}%
+\>[33]\AgdaOperator{\AgdaFunction{—↠⟨}}\AgdaSpace{}%
+\AgdaFunction{appR-cong}\AgdaSymbol{\{}\AgdaArgument{L}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{ƛ}}\AgdaSpace{}%
+\AgdaBound{N′}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{par-betas}\AgdaSpace{}%
+\AgdaBound{p₂}\AgdaSymbol{)}%
+\>[73]\AgdaOperator{\AgdaFunction{⟩}}\<%
+\\
+%
+\>[4]\AgdaSymbol{(}\AgdaOperator{\AgdaInductiveConstructor{ƛ}}\AgdaSpace{}%
+\AgdaBound{N′}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{·}}\AgdaSpace{}%
+\AgdaBound{M′}%
+\>[33]\AgdaOperator{\AgdaInductiveConstructor{—→⟨}}\AgdaSpace{}%
+\AgdaInductiveConstructor{β}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\<%
+\\
+\>[4][@{}l@{\AgdaIndent{0}}]%
+\>[5]\AgdaBound{N′}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{[}}\AgdaSpace{}%
+\AgdaBound{M′}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{]}}\<%
+\\
+%
+\>[4]\AgdaOperator{\AgdaInductiveConstructor{∎}}\<%
+\end{code}
+\end{fence}
+
+The proof is by induction on \texttt{M\ ⇛\ N}.
+
+\begin{itemize}
+\item
+  Suppose \texttt{x\ ⇛\ x}. We immediately have \texttt{x\ —↠\ x}.
+\item
+  Suppose \texttt{ƛ\ N\ ⇛\ ƛ\ N′} because \texttt{N\ ⇛\ N′}. By the
+  induction hypothesis we have \texttt{N\ —↠\ N′}. We conclude that
+  \texttt{ƛ\ N\ —↠\ ƛ\ N′} because \texttt{—↠} is a congruence.
+\item
+  Suppose \texttt{L\ ·\ M\ ⇛\ L′\ ·\ M′} because \texttt{L\ ⇛\ L′} and
+  \texttt{M\ ⇛\ M′}. By the induction hypothesis, we have
+  \texttt{L\ —↠\ L′} and \texttt{M\ —↠\ M′}. So
+  \texttt{L\ ·\ M\ —↠\ L′\ ·\ M} and then
+  \texttt{L′\ ·\ M\ \ —↠\ L′\ ·\ M′} because \texttt{—↠} is a
+  congruence.
+\item
+  Suppose \texttt{(ƛ\ N)\ ·\ M\ \ ⇛\ \ N′\ {[}\ M′\ {]}} because
+  \texttt{N\ ⇛\ N′} and \texttt{M\ ⇛\ M′}. By similar reasoning, we have
+  \texttt{(ƛ\ N)\ ·\ M\ —↠\ (ƛ\ N′)\ ·\ M′} which we can following with
+  the β reduction \texttt{(ƛ\ N′)\ ·\ M′\ —→\ N′\ {[}\ M′\ {]}}.
+\end{itemize}
+
+With this lemma in hand, we complete the proof that \texttt{M\ ⇛*\ N}
+implies \texttt{M\ —↠\ N} with a simple induction on \texttt{M\ ⇛*\ N}.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{pars-betas}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{M}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[460I]\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛*}}\AgdaSpace{}%
+\AgdaBound{N}\<%
+\\
+\>[.][@{}l@{}]\<[460I]%
+\>[4]\AgdaComment{------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{—↠}}\AgdaSpace{}%
+\AgdaBound{N}\<%
+\\
+\>[0]\AgdaFunction{pars-betas}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{M₁}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{∎}}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{M₁}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{∎}}\<%
+\\
+\>[0]\AgdaFunction{pars-betas}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⇛⟨}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaBound{ps}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaFunction{—↠-trans}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{par-betas}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{pars-betas}\AgdaSpace{}%
+\AgdaBound{ps}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{substitution-lemma-for-parallel-reduction}{%
+\section{Substitution lemma for parallel
+reduction}\label{substitution-lemma-for-parallel-reduction}}
+
+Our next goal is the prove the diamond property for parallel reduction.
+But to do that, we need to prove that substitution respects parallel
+reduction. That is, if \texttt{N\ ⇛\ N′} and \texttt{M\ ⇛\ M′}, then
+\texttt{N\ {[}\ M\ {]}\ ⇛\ N′\ {[}\ M′\ {]}}. We cannot prove this
+directly by induction, so we generalize it to: if \texttt{N\ ⇛\ N′} and
+the substitution \texttt{σ} pointwise parallel reduces to \texttt{τ},
+then \texttt{subst\ σ\ N\ ⇛\ subst\ τ\ N′}. We define the notion of
+pointwise parallel reduction as follows.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{par-subst}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{Δ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaFunction{Subst}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{Δ}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaFunction{Subst}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{Δ}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\<%
+\\
+\>[0]\AgdaFunction{par-subst}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}\{}\AgdaBound{Δ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{σ}\AgdaSpace{}%
+\AgdaBound{σ′}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaSymbol{∀\{}\AgdaBound{A}\AgdaSymbol{\}\{}\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{∋}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{σ}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{σ′}\AgdaSpace{}%
+\AgdaBound{x}\<%
+\end{code}
+\end{fence}
+
+Because substitution depends on the extension function \texttt{exts},
+which in turn relies on \texttt{rename}, we start with a version of the
+substitution lemma, called \texttt{par-rename}, that is specialized to
+renamings. The proof of \texttt{par-rename} relies on the fact that
+renaming and substitution commute with one another, which is a lemma
+that we import from Chapter
+\protect\hyperlink{Substitution}{Substitution} and restate here.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{rename-subst-commute}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{Δ}\AgdaSymbol{\}\{}\AgdaBound{N}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaInductiveConstructor{★}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaInductiveConstructor{★}\AgdaSymbol{\}\{}\AgdaBound{M}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaInductiveConstructor{★}\AgdaSymbol{\}\{}\AgdaBound{ρ}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaFunction{Rename}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{Δ}\AgdaSpace{}%
+\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{rename}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{ext}\AgdaSpace{}%
+\AgdaBound{ρ}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{[}}\AgdaSpace{}%
+\AgdaFunction{rename}\AgdaSpace{}%
+\AgdaBound{ρ}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{]}}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaFunction{rename}\AgdaSpace{}%
+\AgdaBound{ρ}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{[}}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{]}}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{rename-subst-commute}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaArgument{N}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaFunction{plfa.part2.Substitution.rename-subst-commute}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaArgument{N}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSymbol{\}}\<%
+\end{code}
+\end{fence}
+
+Now for the \texttt{par-rename} lemma.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{par-rename}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{Δ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{ρ}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaFunction{Rename}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{Δ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{M}\AgdaSpace{}%
+\AgdaBound{M′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[567I]\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{M′}\<%
+\\
+\>[.][@{}l@{}]\<[567I]%
+\>[4]\AgdaComment{------------------------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaFunction{rename}\AgdaSpace{}%
+\AgdaBound{ρ}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaFunction{rename}\AgdaSpace{}%
+\AgdaBound{ρ}\AgdaSpace{}%
+\AgdaBound{M′}\<%
+\\
+\>[0]\AgdaFunction{par-rename}\AgdaSpace{}%
+\AgdaInductiveConstructor{pvar}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{pvar}\<%
+\\
+\>[0]\AgdaFunction{par-rename}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{pabs}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{pabs}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{par-rename}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{par-rename}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{papp}\AgdaSpace{}%
+\AgdaBound{p₁}\AgdaSpace{}%
+\AgdaBound{p₂}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{papp}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{par-rename}\AgdaSpace{}%
+\AgdaBound{p₁}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{par-rename}\AgdaSpace{}%
+\AgdaBound{p₂}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{par-rename}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}\{}\AgdaBound{Δ}\AgdaSymbol{\}\{}\AgdaBound{A}\AgdaSymbol{\}\{}\AgdaBound{ρ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{pbeta}\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}\{}\AgdaBound{N}\AgdaSymbol{\}\{}\AgdaBound{N′}\AgdaSymbol{\}\{}\AgdaBound{M}\AgdaSymbol{\}\{}\AgdaBound{M′}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{p₁}\AgdaSpace{}%
+\AgdaBound{p₂}\AgdaSymbol{)}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaKeyword{with}\AgdaSpace{}%
+\AgdaInductiveConstructor{pbeta}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{par-rename}\AgdaSymbol{\{}\AgdaArgument{ρ}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaFunction{ext}\AgdaSpace{}%
+\AgdaBound{ρ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{p₁}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{par-rename}\AgdaSymbol{\{}\AgdaArgument{ρ}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{ρ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{p₂}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaSymbol{...}\AgdaSpace{}%
+\AgdaSymbol{|}\AgdaSpace{}%
+\AgdaBound{G}\AgdaSpace{}%
+\AgdaKeyword{rewrite}\AgdaSpace{}%
+\AgdaFunction{rename-subst-commute}\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}\{}\AgdaBound{Δ}\AgdaSymbol{\}\{}\AgdaBound{N′}\AgdaSymbol{\}\{}\AgdaBound{M′}\AgdaSymbol{\}\{}\AgdaBound{ρ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{G}\<%
+\\
+\>[0]\<%
+\end{code}
+\end{fence}
+
+The proof is by induction on \texttt{M\ ⇛\ M′}. The first four cases are
+straightforward so we just consider the last one for \texttt{pbeta}.
+
+\begin{itemize}
+\tightlist
+\item
+  Suppose \texttt{(ƛ\ N)\ ·\ M\ \ ⇛\ \ N′\ {[}\ M′\ {]}} because
+  \texttt{N\ ⇛\ N′} and \texttt{M\ ⇛\ M′}. By the induction hypothesis,
+  we have \texttt{rename\ (ext\ ρ)\ N\ ⇛\ rename\ (ext\ ρ)\ N′} and
+  \texttt{rename\ ρ\ M\ ⇛\ rename\ ρ\ M′}. So by \texttt{pbeta} we have
+  \texttt{(ƛ\ rename\ (ext\ ρ)\ N)\ ·\ (rename\ ρ\ M)\ ⇛\ (rename\ (ext\ ρ)\ N)\ {[}\ rename\ ρ\ M\ {]}}.
+  However, to conclude we instead need parallel reduction to
+  \texttt{rename\ ρ\ (N\ {[}\ M\ {]})}. But thankfully, renaming and
+  substitution commute with one another.
+\end{itemize}
+
+With the \texttt{par-rename} lemma in hand, it is straightforward to
+show that extending substitutions preserves the pointwise parallel
+reduction relation.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{par-subst-exts}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{Δ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{σ}\AgdaSpace{}%
+\AgdaBound{τ}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaFunction{Subst}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{Δ}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[624I]\AgdaFunction{par-subst}\AgdaSpace{}%
+\AgdaBound{σ}\AgdaSpace{}%
+\AgdaBound{τ}\<%
+\\
+\>[.][@{}l@{}]\<[624I]%
+\>[4]\AgdaComment{------------------------------------------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{∀\{}\AgdaBound{B}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaFunction{par-subst}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{exts}\AgdaSpace{}%
+\AgdaBound{σ}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaArgument{B}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSymbol{\})}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{exts}\AgdaSpace{}%
+\AgdaBound{τ}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{par-subst-exts}\AgdaSpace{}%
+\AgdaBound{s}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaArgument{x}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{Z}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{pvar}\<%
+\\
+\>[0]\AgdaFunction{par-subst-exts}\AgdaSpace{}%
+\AgdaBound{s}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaArgument{x}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{S}}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaFunction{par-rename}\AgdaSpace{}%
+\AgdaBound{s}\<%
+\end{code}
+\end{fence}
+
+The next lemma that we need for proving that substitution respects
+parallel reduction is the following which states that simultaneoous
+substitution commutes with single substitution. We import this lemma
+from Chapter \protect\hyperlink{Substitution}{Substitution} and restate
+it below.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{subst-commute}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{Δ}\AgdaSymbol{\}\{}\AgdaBound{N}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaInductiveConstructor{★}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaInductiveConstructor{★}\AgdaSymbol{\}\{}\AgdaBound{M}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaInductiveConstructor{★}\AgdaSymbol{\}\{}\AgdaBound{σ}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaFunction{Subst}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{Δ}\AgdaSpace{}%
+\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaFunction{subst}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{exts}\AgdaSpace{}%
+\AgdaBound{σ}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{[}}\AgdaSpace{}%
+\AgdaFunction{subst}\AgdaSpace{}%
+\AgdaBound{σ}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{]}}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaFunction{subst}\AgdaSpace{}%
+\AgdaBound{σ}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{[}}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{]}}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{subst-commute}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaArgument{N}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaFunction{plfa.part2.Substitution.subst-commute}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaArgument{N}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSymbol{\}}\<%
+\end{code}
+\end{fence}
+
+We are ready to prove that substitution respects parallel reduction.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{subst-par}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{Δ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{σ}\AgdaSpace{}%
+\AgdaBound{τ}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaFunction{Subst}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{Δ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{M}\AgdaSpace{}%
+\AgdaBound{M′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[709I]\AgdaFunction{par-subst}\AgdaSpace{}%
+\AgdaBound{σ}\AgdaSpace{}%
+\AgdaBound{τ}%
+\>[19]\AgdaSymbol{→}%
+\>[22]\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{M′}\<%
+\\
+\>[.][@{}l@{}]\<[709I]%
+\>[4]\AgdaComment{--------------------------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaFunction{subst}\AgdaSpace{}%
+\AgdaBound{σ}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaFunction{subst}\AgdaSpace{}%
+\AgdaBound{τ}\AgdaSpace{}%
+\AgdaBound{M′}\<%
+\\
+\>[0]\AgdaFunction{subst-par}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Δ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{σ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{τ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaOperator{\AgdaInductiveConstructor{`}}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{s}\AgdaSpace{}%
+\AgdaInductiveConstructor{pvar}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{s}\<%
+\\
+\>[0]\AgdaFunction{subst-par}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Δ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{σ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{τ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaOperator{\AgdaInductiveConstructor{ƛ}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{s}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{pabs}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaInductiveConstructor{pabs}%
+\>[743I]\AgdaSymbol{(}\AgdaFunction{subst-par}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaArgument{σ}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaFunction{exts}\AgdaSpace{}%
+\AgdaBound{σ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaArgument{τ}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaFunction{exts}\AgdaSpace{}%
+\AgdaBound{τ}\AgdaSymbol{\}}\<%
+\\
+\>[743I][@{}l@{\AgdaIndent{0}}]%
+\>[8]\AgdaSymbol{(λ}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}\{}\AgdaBound{x}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaFunction{par-subst-exts}\AgdaSpace{}%
+\AgdaBound{s}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaArgument{x}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{\})}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{subst-par}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Δ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaInductiveConstructor{★}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{σ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{τ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{·}}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{s}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{papp}\AgdaSpace{}%
+\AgdaBound{p₁}\AgdaSpace{}%
+\AgdaBound{p₂}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaInductiveConstructor{papp}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{subst-par}\AgdaSpace{}%
+\AgdaBound{s}\AgdaSpace{}%
+\AgdaBound{p₁}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{subst-par}\AgdaSpace{}%
+\AgdaBound{s}\AgdaSpace{}%
+\AgdaBound{p₂}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{subst-par}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Δ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaInductiveConstructor{★}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{σ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{τ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{(}\AgdaOperator{\AgdaInductiveConstructor{ƛ}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{·}}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{s}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{pbeta}\AgdaSymbol{\{}\AgdaArgument{N′}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{N′}\AgdaSymbol{\}\{}\AgdaArgument{M′}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{M′}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{p₁}\AgdaSpace{}%
+\AgdaBound{p₂}\AgdaSymbol{)}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaKeyword{with}\AgdaSpace{}%
+\AgdaInductiveConstructor{pbeta}%
+\>[797I]\AgdaSymbol{(}\AgdaFunction{subst-par}\AgdaSymbol{\{}\AgdaArgument{σ}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaFunction{exts}\AgdaSpace{}%
+\AgdaBound{σ}\AgdaSymbol{\}\{}\AgdaArgument{τ}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaFunction{exts}\AgdaSpace{}%
+\AgdaBound{τ}\AgdaSymbol{\}\{}\AgdaArgument{M}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSymbol{\}}\<%
+\\
+\>[797I][@{}l@{\AgdaIndent{0}}]%
+\>[24]\AgdaSymbol{(λ\{}\AgdaBound{A}\AgdaSymbol{\}\{}\AgdaBound{x}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaFunction{par-subst-exts}\AgdaSpace{}%
+\AgdaBound{s}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaArgument{x}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{\})}\AgdaSpace{}%
+\AgdaBound{p₁}\AgdaSymbol{)}\<%
+\\
+\>[.][@{}l@{}]\<[797I]%
+\>[15]\AgdaSymbol{(}\AgdaFunction{subst-par}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaArgument{σ}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{σ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{s}\AgdaSpace{}%
+\AgdaBound{p₂}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaSymbol{...}\AgdaSpace{}%
+\AgdaSymbol{|}\AgdaSpace{}%
+\AgdaBound{G}\AgdaSpace{}%
+\AgdaKeyword{rewrite}\AgdaSpace{}%
+\AgdaFunction{subst-commute}\AgdaSymbol{\{}\AgdaArgument{N}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{N′}\AgdaSymbol{\}\{}\AgdaArgument{M}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{M′}\AgdaSymbol{\}\{}\AgdaArgument{σ}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{τ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{G}\<%
+\end{code}
+\end{fence}
+
+We proceed by induction on \texttt{M\ ⇛\ M′}.
+
+\begin{itemize}
+\item
+  Suppose \texttt{x\ ⇛\ x}. We conclude that \texttt{σ\ x\ ⇛\ τ\ x}
+  using the premise \texttt{par-subst\ σ\ τ}.
+\item
+  Suppose \texttt{ƛ\ N\ ⇛\ ƛ\ N′} because \texttt{N\ ⇛\ N′}. To use the
+  induction hypothesis, we need
+  \texttt{par-subst\ (exts\ σ)\ (exts\ τ)}, which we obtain by
+  \texttt{par-subst-exts}. So we have
+  \texttt{subst\ (exts\ σ)\ N\ ⇛\ subst\ (exts\ τ)\ N′} and conclude by
+  rule \texttt{pabs}.
+\item
+  Suppose \texttt{L\ ·\ M\ ⇛\ L′\ ·\ M′} because \texttt{L\ ⇛\ L′} and
+  \texttt{M\ ⇛\ M′}. By the induction hypothesis we have
+  \texttt{subst\ σ\ L\ ⇛\ subst\ τ\ L′} and
+  \texttt{subst\ σ\ M\ ⇛\ subst\ τ\ M′}, so we conclude by rule
+  \texttt{papp}.
+\item
+  Suppose \texttt{(ƛ\ N)\ ·\ M\ \ ⇛\ \ N′\ {[}\ M′\ {]}} because
+  \texttt{N\ ⇛\ N′} and \texttt{M\ ⇛\ M′}. Again we obtain
+  \texttt{par-subst\ (exts\ σ)\ (exts\ τ)} by \texttt{par-subst-exts}.
+  So by the induction hypothesis, we have
+  \texttt{subst\ (exts\ σ)\ N\ ⇛\ subst\ (exts\ τ)\ N′} and
+  \texttt{subst\ σ\ M\ ⇛\ subst\ τ\ M′}. Then by rule \texttt{pbeta}, we
+  have parallel reduction to
+  \texttt{subst\ (exts\ τ)\ N′\ {[}\ subst\ τ\ M′\ {]}}. Substitution
+  commutes with itself in the following sense. For any σ, N, and M, we
+  have
+
+  \begin{myDisplay}
+    (subst (exts σ) N) [ subst σ M ] ≡ subst σ (N [ M ])
+  \end{myDisplay}
+
+  So we have parallel reduction to
+  \texttt{subst\ τ\ (N′\ {[}\ M′\ {]})}.
+\end{itemize}
+
+Of course, if \texttt{M\ ⇛\ M′}, then \texttt{subst-zero\ M} pointwise
+parallel reduces to \texttt{subst-zero\ M′}.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{par-subst-zero}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀\{}\AgdaBound{Γ}\AgdaSymbol{\}\{}\AgdaBound{A}\AgdaSymbol{\}\{}\AgdaBound{M}\AgdaSpace{}%
+\AgdaBound{M′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[7]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{M′}\<%
+\\
+%
+\>[7]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaFunction{par-subst}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{subst-zero}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{subst-zero}\AgdaSpace{}%
+\AgdaBound{M′}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{par-subst-zero}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{M}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{M′}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaInductiveConstructor{Z}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{p}\<%
+\\
+\>[0]\AgdaFunction{par-subst-zero}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{M}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{M′}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaOperator{\AgdaInductiveConstructor{S}}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{pvar}\<%
+\end{code}
+\end{fence}
+
+We conclude this section with the desired corollary, that substitution
+respects parallel reduction.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{sub-par}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{N}\AgdaSpace{}%
+\AgdaBound{N′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{M}\AgdaSpace{}%
+\AgdaBound{M′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{N′}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}%
+\>[881I]\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{M′}\<%
+\\
+\>[.][@{}l@{}]\<[881I]%
+\>[4]\AgdaComment{--------------------------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{[}}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{]}}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{N′}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{[}}\AgdaSpace{}%
+\AgdaBound{M′}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{]}}\<%
+\\
+\>[0]\AgdaFunction{sub-par}\AgdaSpace{}%
+\AgdaBound{pn}\AgdaSpace{}%
+\AgdaBound{pm}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaFunction{subst-par}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{par-subst-zero}\AgdaSpace{}%
+\AgdaBound{pm}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaBound{pn}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{parallel-reduction-satisfies-the-diamond-property}{%
+\section{Parallel reduction satisfies the diamond
+property}\label{parallel-reduction-satisfies-the-diamond-property}}
+
+The heart of the confluence proof is made of stone, or rather, of
+diamond! We show that parallel reduction satisfies the diamond property:
+that if \texttt{M\ ⇛\ N} and \texttt{M\ ⇛\ N′}, then \texttt{N\ ⇛\ L}
+and \texttt{N′\ ⇛\ L} for some \texttt{L}. The typical proof is an
+induction on \texttt{M\ ⇛\ N} and \texttt{M\ ⇛\ N′} so that every
+possible pair gives rise to a witness \texttt{L} given by performing
+enough beta reductions in parallel.
+
+However, a simpler approach is to perform as many beta reductions in
+parallel as possible on \texttt{M}, say \texttt{M\ ⁺}, and then show
+that \texttt{N} also parallel reduces to \texttt{M\ ⁺}. This is the idea
+of Takahashi's \emph{complete development}. The desired property may be
+illustrated as
+
+\begin{myDisplay}
+    M
+   /|
+  / |
+ /  |
+N   2
+ \  |
+  \ |
+   \|
+    M⁺
+\end{myDisplay}
+
+where downward lines are instances of \texttt{⇛}, so we call it the
+\emph{triangle property}.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaOperator{\AgdaFunction{\AgdaUnderscore{}⁺}}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\<%
+\\
+\>[0]\AgdaSymbol{(}\AgdaOperator{\AgdaInductiveConstructor{`}}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{⁺}}%
+\>[14]\AgdaSymbol{=}%
+\>[17]\AgdaOperator{\AgdaInductiveConstructor{`}}\AgdaSpace{}%
+\AgdaBound{x}\<%
+\\
+\>[0]\AgdaSymbol{(}\AgdaOperator{\AgdaInductiveConstructor{ƛ}}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{⁺}}%
+\>[14]\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{ƛ}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{⁺}}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaSymbol{((}\AgdaOperator{\AgdaInductiveConstructor{ƛ}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{·}}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{⁺}}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{⁺}}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{[}}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{⁺}}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{]}}\<%
+\\
+\>[0]\AgdaCatchallClause{\AgdaSymbol{(}}\AgdaCatchallClause{\AgdaBound{L}}\AgdaSpace{}%
+\AgdaCatchallClause{\AgdaOperator{\AgdaInductiveConstructor{·}}}\AgdaSpace{}%
+\AgdaCatchallClause{\AgdaBound{M}}\AgdaCatchallClause{\AgdaSymbol{)}}\AgdaSpace{}%
+\AgdaCatchallClause{\AgdaOperator{\AgdaFunction{⁺}}}%
+\>[14]\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{⁺}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{·}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{⁺}}\AgdaSymbol{)}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0]\AgdaFunction{par-triangle}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{M}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[948I]\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{N}\<%
+\\
+\>[.][@{}l@{}]\<[948I]%
+\>[4]\AgdaComment{-------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{⁺}}\<%
+\\
+\>[0]\AgdaFunction{par-triangle}\AgdaSpace{}%
+\AgdaInductiveConstructor{pvar}%
+\>[27]\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{pvar}\<%
+\\
+\>[0]\AgdaFunction{par-triangle}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{pabs}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}%
+\>[27]\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{pabs}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{par-triangle}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{par-triangle}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{pbeta}\AgdaSpace{}%
+\AgdaBound{p1}\AgdaSpace{}%
+\AgdaBound{p2}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaFunction{sub-par}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{par-triangle}\AgdaSpace{}%
+\AgdaBound{p1}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{par-triangle}\AgdaSpace{}%
+\AgdaBound{p2}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{par-triangle}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{papp}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaArgument{L}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{ƛ}}\AgdaSpace{}%
+\AgdaSymbol{\AgdaUnderscore{}}\AgdaSpace{}%
+\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{pabs}\AgdaSpace{}%
+\AgdaBound{p1}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaBound{p2}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaInductiveConstructor{pbeta}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{par-triangle}\AgdaSpace{}%
+\AgdaBound{p1}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{par-triangle}\AgdaSpace{}%
+\AgdaBound{p2}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{par-triangle}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{papp}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaArgument{L}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{`}}\AgdaSpace{}%
+\AgdaSymbol{\AgdaUnderscore{}\}}%
+\>[31]\AgdaBound{p1}\AgdaSpace{}%
+\AgdaBound{p2}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{papp}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{par-triangle}\AgdaSpace{}%
+\AgdaBound{p1}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{par-triangle}\AgdaSpace{}%
+\AgdaBound{p2}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{par-triangle}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{papp}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaArgument{L}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaSymbol{\AgdaUnderscore{}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{·}}\AgdaSpace{}%
+\AgdaSymbol{\AgdaUnderscore{}\}}\AgdaSpace{}%
+\AgdaBound{p1}\AgdaSpace{}%
+\AgdaBound{p2}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{papp}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{par-triangle}\AgdaSpace{}%
+\AgdaBound{p1}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{par-triangle}\AgdaSpace{}%
+\AgdaBound{p2}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+The proof of the triangle property is an induction on \texttt{M\ ⇛\ N}.
+
+\begin{itemize}
+\item
+  Suppose \texttt{x\ ⇛\ x}. Clearly \texttt{x\ ⁺\ =\ x}, so
+  \texttt{x\ ⇛\ x}.
+\item
+  Suppose \texttt{ƛ\ M\ ⇛\ ƛ\ N}. By the induction hypothesis we have
+  \texttt{N\ ⇛\ M\ ⁺} and by definition
+  \texttt{(λ\ M)\ ⁺\ =\ λ\ (M\ ⁺)}, so we conclude that
+  \texttt{λ\ N\ ⇛\ λ\ \ \ (M\ ⁺)}.
+\item
+  Suppose \texttt{(λ\ N)\ ·\ M\ ⇛\ N′\ {[}\ M′\ {]}}. By the induction
+  hypothesis, we have \texttt{N′\ ⇛\ N\ ⁺} and \texttt{M′\ ⇛\ M\ ⁺}.
+  Since substitution respects parallel reduction, it follows that
+  \texttt{N′\ {[}\ M′\ {]}\ ⇛\ N\ ⁺\ {[}\ M\ ⁺\ {]}}, but the right hand
+  side is exactly \texttt{((λ\ N)\ ·\ M)\ ⁺}, hence
+  \texttt{N′\ {[}\ M′\ {]}\ ⇛\ ((λ\ N)\ ·\ M)\ ⁺}.
+\item
+  Suppose \texttt{(λ\ L)\ ·\ M\ ⇛\ (λ\ L′)\ ·\ M′}. By the induction
+  hypothesis we have \texttt{L′\ ⇛\ L\ ⁺} and \texttt{M′\ ⇛\ M\ ⁺}; by
+  definition \texttt{((λ\ L)\ ·\ M)\ ⁺\ =\ L\ ⁺\ {[}\ M\ ⁺\ {]}}. It
+  follows \texttt{(λ\ L′)\ ·\ M′\ ⇛\ L\ ⁺\ {[}\ M\ ⁺\ {]}}.
+\item
+  Suppose \texttt{x\ ·\ M\ ⇛\ x\ ·\ M′}. By the induction hypothesis we
+  have \texttt{M′\ ⇛\ M\ ⁺} and \texttt{x\ ⇛\ x\ ⁺} so that
+  \texttt{x\ ·\ M′\ ⇛\ x\ ·\ M\ ⁺}. The remaining case is proved in the
+  same way, so we ignore it. (As there is currently no way in Agda to
+  expand the catch-all pattern in the definition of \texttt{\_⁺} for us
+  before checking the right-hand side, we have to write down the
+  remaining case explicitly.)
+\end{itemize}
+
+The diamond property then follows by halving the diamond into two
+triangles.
+
+\begin{myDisplay}
+    M
+   /|\
+  / | \
+ /  |  \
+N   2   N′
+ \  |  /
+  \ | /
+   \|/
+    M⁺
+\end{myDisplay}
+
+That is, the diamond property is proved by applying the triangle
+property on each side with the same confluent term \texttt{M\ ⁺}.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{par-diamond}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{M}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaBound{N′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{N}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}%
+\>[1024I]\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{N′}\<%
+\\
+\>[.][@{}l@{}]\<[1024I]%
+\>[4]\AgdaComment{---------------------------------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaFunction{Σ[}\AgdaSpace{}%
+\AgdaBound{L}\AgdaSpace{}%
+\AgdaFunction{∈}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaFunction{]}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{L}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{×}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{N′}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{L}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{par-diamond}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaArgument{M}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{p1}\AgdaSpace{}%
+\AgdaBound{p2}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{⁺}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaFunction{par-triangle}\AgdaSpace{}%
+\AgdaBound{p1}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaFunction{par-triangle}\AgdaSpace{}%
+\AgdaBound{p2}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\<%
+\end{code}
+\end{fence}
+
+This step is optional, though, in the presence of triangle property.
+
+\hypertarget{exercise-practice}{%
+\subsubsection{Exercise (practice)}\label{exercise-practice}}
+
+\begin{itemize}
+\item
+  Prove the diamond property \texttt{par-diamond} directly by induction
+  on \texttt{M\ ⇛\ N} and \texttt{M\ ⇛\ N′}.
+\item
+  Draw pictures that represent the proofs of each of the six cases in
+  the direct proof of \texttt{par-diamond}. The pictures should consist
+  of nodes and directed edges, where each node is labeled with a term
+  and each edge represents parallel reduction.
+\end{itemize}
+
+\hypertarget{proof-of-confluence-for-parallel-reduction}{%
+\section{Proof of confluence for parallel
+reduction}\label{proof-of-confluence-for-parallel-reduction}}
+
+As promised at the beginning, the proof that parallel reduction is
+confluent is easy now that we know it satisfies the triangle property.
+We just need to prove the strip lemma, which states that if
+\texttt{M\ ⇛\ N} and \texttt{M\ ⇛*\ N′}, then \texttt{N\ ⇛*\ L} and
+\texttt{N′\ ⇛\ L} for some \texttt{L}. The following diagram illustrates
+the strip lemma
+
+\begin{myDisplay}
+    M
+   / \
+  1   *
+ /     \
+N       N′
+ \     /
+  *   1
+   \ /
+    L
+\end{myDisplay}
+
+where downward lines are instances of \texttt{⇛} or \texttt{⇛*},
+depending on how they are marked.
+
+The proof of the strip lemma is a straightforward induction on
+\texttt{M\ ⇛*\ N′}, using the triangle property in the induction step.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{strip}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{M}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaBound{N′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{N}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}%
+\>[1072I]\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛*}}\AgdaSpace{}%
+\AgdaBound{N′}\<%
+\\
+\>[.][@{}l@{}]\<[1072I]%
+\>[4]\AgdaComment{------------------------------------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaFunction{Σ[}\AgdaSpace{}%
+\AgdaBound{L}\AgdaSpace{}%
+\AgdaFunction{∈}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaFunction{]}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛*}}\AgdaSpace{}%
+\AgdaBound{L}\AgdaSymbol{)}%
+\>[29]\AgdaOperator{\AgdaFunction{×}}%
+\>[32]\AgdaSymbol{(}\AgdaBound{N′}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛}}\AgdaSpace{}%
+\AgdaBound{L}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{strip}\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}\{}\AgdaBound{A}\AgdaSymbol{\}\{}\AgdaBound{M}\AgdaSymbol{\}\{}\AgdaBound{N}\AgdaSymbol{\}\{}\AgdaBound{N′}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{mn}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{∎}}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{∎}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaBound{mn}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\<%
+\\
+\>[0]\AgdaFunction{strip}\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}\{}\AgdaBound{A}\AgdaSymbol{\}\{}\AgdaBound{M}\AgdaSymbol{\}\{}\AgdaBound{N}\AgdaSymbol{\}\{}\AgdaBound{N′}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{mn}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⇛⟨}}\AgdaSpace{}%
+\AgdaBound{mm'}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaBound{m'n'}\AgdaSymbol{)}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaKeyword{with}\AgdaSpace{}%
+\AgdaFunction{strip}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{par-triangle}\AgdaSpace{}%
+\AgdaBound{mm'}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaBound{m'n'}\<%
+\\
+\>[0]\AgdaSymbol{...}\AgdaSpace{}%
+\AgdaSymbol{|}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{ll'}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaBound{n'l'}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⇛⟨}}\AgdaSpace{}%
+\AgdaFunction{par-triangle}\AgdaSpace{}%
+\AgdaBound{mn}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaBound{ll'}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaBound{n'l'}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\<%
+\end{code}
+\end{fence}
+
+The proof of confluence for parallel reduction is now proved by
+induction on the sequence \texttt{M\ ⇛*\ N}, using the above lemma in
+the induction step.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{par-confluence}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{L}\AgdaSpace{}%
+\AgdaBound{M₁}\AgdaSpace{}%
+\AgdaBound{M₂}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛*}}\AgdaSpace{}%
+\AgdaBound{M₁}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}%
+\>[1149I]\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛*}}\AgdaSpace{}%
+\AgdaBound{M₂}\<%
+\\
+\>[.][@{}l@{}]\<[1149I]%
+\>[4]\AgdaComment{------------------------------------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaFunction{Σ[}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaFunction{∈}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaFunction{]}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{M₁}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛*}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{×}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{M₂}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⇛*}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{par-confluence}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}\{}\AgdaBound{A}\AgdaSymbol{\}\{}\AgdaBound{L}\AgdaSymbol{\}\{}\AgdaDottedPattern{\AgdaSymbol{.}}\AgdaDottedPattern{\AgdaBound{L}}\AgdaSymbol{\}\{}\AgdaBound{N}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{∎}}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaBound{L⇛*N}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{L⇛*N}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{∎}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\<%
+\\
+\>[0]\AgdaFunction{par-confluence}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}\{}\AgdaBound{A}\AgdaSymbol{\}\{}\AgdaBound{L}\AgdaSymbol{\}\{}\AgdaBound{M₁′}\AgdaSymbol{\}\{}\AgdaBound{M₂}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⇛⟨}}\AgdaSpace{}%
+\AgdaBound{L⇛M₁}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaBound{M₁⇛*M₁′}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaBound{L⇛*M₂}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaKeyword{with}\AgdaSpace{}%
+\AgdaFunction{strip}\AgdaSpace{}%
+\AgdaBound{L⇛M₁}\AgdaSpace{}%
+\AgdaBound{L⇛*M₂}\<%
+\\
+\>[0]\AgdaSymbol{...}\AgdaSpace{}%
+\AgdaSymbol{|}%
+\>[1192I]\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{M₁⇛*N}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaBound{M₂⇛N}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\<%
+\\
+\>[.][@{}l@{}]\<[1192I]%
+\>[6]\AgdaKeyword{with}\AgdaSpace{}%
+\AgdaFunction{par-confluence}\AgdaSpace{}%
+\AgdaBound{M₁⇛*M₁′}\AgdaSpace{}%
+\AgdaBound{M₁⇛*N}\<%
+\\
+\>[0]\AgdaSymbol{...}%
+\>[6]\AgdaSymbol{|}%
+\>[1204I]\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{N′}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{M₁′⇛*N′}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaBound{N⇛*N′}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[.][@{}l@{}]\<[1204I]%
+\>[8]\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{N′}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{M₁′⇛*N′}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{M₂}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⇛⟨}}\AgdaSpace{}%
+\AgdaBound{M₂⇛N}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaBound{N⇛*N′}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\<%
+\end{code}
+\end{fence}
+
+The step case may be illustrated as follows:
+
+\begin{myDisplay}
+        L
+       / \
+      1   *
+     /     \
+    M₁ (a)  M₂
+   / \     /
+  *   *   1
+ /     \ /
+M₁′(b)  N
+ \     /
+  *   *
+   \ /
+    N′
+\end{myDisplay}
+
+where downward lines are instances of \texttt{⇛} or \texttt{⇛*},
+depending on how they are marked. Here \texttt{(a)} holds by
+\texttt{strip} and \texttt{(b)} holds by induction.
+
+\hypertarget{proof-of-confluence-for-reduction}{%
+\section{Proof of confluence for
+reduction}\label{proof-of-confluence-for-reduction}}
+
+Confluence of reduction is a corollary of confluence for parallel
+reduction. From \texttt{L\ —↠\ M₁} and \texttt{L\ —↠\ M₂} we have
+\texttt{L\ ⇛*\ M₁} and \texttt{L\ ⇛*\ M₂} by \texttt{betas-pars}. Then
+by confluence we obtain some \texttt{L} such that \texttt{M₁\ ⇛*\ N} and
+\texttt{M₂\ ⇛*\ N}, from which we conclude that \texttt{M₁\ —↠\ N} and
+\texttt{M₂\ —↠\ N} by \texttt{pars-betas}.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{confluence}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{L}\AgdaSpace{}%
+\AgdaBound{M₁}\AgdaSpace{}%
+\AgdaBound{M₂}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{—↠}}\AgdaSpace{}%
+\AgdaBound{M₁}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}%
+\>[1239I]\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{—↠}}\AgdaSpace{}%
+\AgdaBound{M₂}\<%
+\\
+\>[.][@{}l@{}]\<[1239I]%
+\>[4]\AgdaComment{-----------------------------------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaFunction{Σ[}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaFunction{∈}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaFunction{]}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{M₁}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{—↠}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{×}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{M₂}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{—↠}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{confluence}\AgdaSpace{}%
+\AgdaBound{L↠M₁}\AgdaSpace{}%
+\AgdaBound{L↠M₂}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaKeyword{with}\AgdaSpace{}%
+\AgdaFunction{par-confluence}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{betas-pars}\AgdaSpace{}%
+\AgdaBound{L↠M₁}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{betas-pars}\AgdaSpace{}%
+\AgdaBound{L↠M₂}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaSymbol{...}\AgdaSpace{}%
+\AgdaSymbol{|}%
+\>[1264I]\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{M₁⇛N}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaBound{M₂⇛N}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[.][@{}l@{}]\<[1264I]%
+\>[6]\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaFunction{pars-betas}\AgdaSpace{}%
+\AgdaBound{M₁⇛N}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaFunction{pars-betas}\AgdaSpace{}%
+\AgdaBound{M₂⇛N}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{notes}{%
+\section{Notes}\label{notes}}
+
+Broadly speaking, this proof of confluence, based on parallel reduction,
+is due to W. Tait and P. Martin-Löf (see Barendredgt 1984, Section 3.2).
+Details of the mechanization come from several sources. The
+\texttt{subst-par} lemma is the ``strong substitutivity'' lemma of
+Shafer, Tebbi, and Smolka (ITP 2015). The proofs of
+\texttt{par-triangle}, \texttt{strip}, and \texttt{par-confluence} are
+based on the notion of complete development by Takahashi (1995) and
+Pfenning's 1992 technical report about the Church-Rosser theorem. In
+addition, we consulted Nipkow and Berghofer's mechanization in Isabelle,
+which is based on an earlier article by Nipkow (JAR 1996).
+
+\hypertarget{unicode}{%
+\section{Unicode}\label{unicode}}
+
+This chapter uses the following unicode:
+
+\begin{myDisplay}
+⇛  U+21DB  RIGHTWARDS TRIPLE ARROW (\r== or \Rrightarrow)
+⁺  U+207A  SUPERSCRIPT PLUS SIGN   (\^+)
+\end{myDisplay}
+

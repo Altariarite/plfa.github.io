@@ -1,0 +1,1497 @@
+\hypertarget{Quantifiers}{%
+\chapter{Quantifiers: Universals and existentials}\label{Quantifiers}}
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{module}\AgdaSpace{}%
+\AgdaModule{plfa.part1.Quantifiers}\AgdaSpace{}%
+\AgdaKeyword{where}\<%
+\end{code}
+\end{fence}
+
+This chapter introduces universal and existential quantification.
+
+\hypertarget{imports}{%
+\section{Imports}\label{imports}}
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{Relation.Binary.PropositionalEquality}\AgdaSpace{}%
+\AgdaSymbol{as}\AgdaSpace{}%
+\AgdaModule{Eq}\<%
+\\
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaModule{Eq}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaDatatype{\AgdaUnderscore{}≡\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{Data.Nat}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaDatatype{ℕ}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{\AgdaUnderscore{}+\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{\AgdaUnderscore{}*\AgdaUnderscore{}}}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{Relation.Nullary}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaFunction{¬\AgdaUnderscore{}}}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{Data.Product}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaFunction{\AgdaUnderscore{}×\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaField{proj₁}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaField{proj₂}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaKeyword{renaming}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaInductiveConstructor{\AgdaUnderscore{},\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{to}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨\AgdaUnderscore{},\AgdaUnderscore{}⟩}}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{Data.Sum}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaDatatype{\AgdaUnderscore{}⊎\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaInductiveConstructor{inj₁}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaInductiveConstructor{inj₂}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{plfa.part1.Isomorphism}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaRecord{\AgdaUnderscore{}≃\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaPostulate{extensionality}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{universals}{%
+\section{Universals}\label{universals}}
+
+We formalise universal quantification using the dependent function type,
+which has appeared throughout this book. For instance, in Chapter
+Induction we showed addition is associative:
+
+\begin{myDisplay}
++-assoc : ∀ (m n p : ℕ) → (m + n) + p ≡ m + (n + p)
+\end{myDisplay}
+
+which asserts for all natural numbers \texttt{m}, \texttt{n}, and
+\texttt{p} that \texttt{(m\ +\ n)\ +\ p\ ≡\ m\ +\ (n\ +\ p)} holds. It
+is a dependent function, which given values for \texttt{m}, \texttt{n},
+and \texttt{p} returns evidence for the corresponding equation.
+
+In general, given a variable \texttt{x} of type \texttt{A} and a
+proposition \texttt{B\ x} which contains \texttt{x} as a free variable,
+the universally quantified proposition \texttt{∀\ (x\ :\ A)\ →\ B\ x}
+holds if for every term \texttt{M} of type \texttt{A} the proposition
+\texttt{B\ M} holds. Here \texttt{B\ M} stands for the proposition
+\texttt{B\ x} with each free occurrence of \texttt{x} replaced by
+\texttt{M}. Variable \texttt{x} appears free in \texttt{B\ x} but bound
+in \texttt{∀\ (x\ :\ A)\ →\ B\ x}.
+
+Evidence that \texttt{∀\ (x\ :\ A)\ →\ B\ x} holds is of the form
+
+\begin{myDisplay}
+λ (x : A) → N x
+\end{myDisplay}
+
+where \texttt{N\ x} is a term of type \texttt{B\ x}, and \texttt{N\ x}
+and \texttt{B\ x} both contain a free variable \texttt{x} of type
+\texttt{A}. Given a term \texttt{L} providing evidence that
+\texttt{∀\ (x\ :\ A)\ →\ B\ x} holds, and a term \texttt{M} of type
+\texttt{A}, the term \texttt{L\ M} provides evidence that \texttt{B\ M}
+holds. In other words, evidence that \texttt{∀\ (x\ :\ A)\ →\ B\ x}
+holds is a function that converts a term \texttt{M} of type \texttt{A}
+into evidence that \texttt{B\ M} holds.
+
+Put another way, if we know that \texttt{∀\ (x\ :\ A)\ →\ B\ x} holds
+and that \texttt{M} is a term of type \texttt{A} then we may conclude
+that \texttt{B\ M} holds:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{∀-elim}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{B}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{L}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}%
+\>[61I]\AgdaSymbol{(}\AgdaBound{M}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\<%
+\\
+\>[.][@{}l@{}]\<[61I]%
+\>[4]\AgdaComment{-----------------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{M}\<%
+\\
+\>[0]\AgdaFunction{∀-elim}\AgdaSpace{}%
+\AgdaBound{L}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{L}\AgdaSpace{}%
+\AgdaBound{M}\<%
+\end{code}
+\end{fence}
+
+As with \texttt{→-elim}, the rule corresponds to function application.
+
+Functions arise as a special case of dependent functions, where the
+range does not depend on a variable drawn from the domain. When a
+function is viewed as evidence of implication, both its argument and
+result are viewed as evidence, whereas when a dependent function is
+viewed as evidence of a universal, its argument is viewed as an element
+of a data type and its result is viewed as evidence of a proposition
+that depends on the argument. This difference is largely a matter of
+interpretation, since in Agda a value of a type and evidence of a
+proposition are indistinguishable.
+
+Dependent function types are sometimes referred to as dependent
+products, because if \texttt{A} is a finite type with values
+\texttt{x₁\ ,\ ⋯\ ,\ xₙ}, and if each of the types
+\texttt{B\ x₁\ ,\ ⋯\ ,\ B\ xₙ} has \texttt{m₁\ ,\ ⋯\ ,\ mₙ} distinct
+members, then \texttt{∀\ (x\ :\ A)\ →\ B\ x} has
+\texttt{m₁\ *\ ⋯\ *\ mₙ} members. Indeed, sometimes the notation
+\texttt{∀\ (x\ :\ A)\ →\ B\ x} is replaced by a notation such as
+\texttt{Π{[}\ x\ ∈\ A\ {]}\ (B\ x)}, where \texttt{Π} stands for
+product. However, we will stick with the name dependent function,
+because (as we will see) dependent product is ambiguous.
+
+\hypertarget{exercise--distrib--recommended}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{∀-distrib-×}
+(recommended)}{Exercise ∀-distrib-× (recommended)}}\label{exercise--distrib--recommended}}
+
+Show that universals distribute over conjunction:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{postulate}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaPostulate{∀-distrib-×}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{C}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{(∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{×}}\AgdaSpace{}%
+\AgdaBound{C}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaRecord{≃}}\AgdaSpace{}%
+\AgdaSymbol{(∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{×}}\AgdaSpace{}%
+\AgdaSymbol{(∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{C}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+Compare this with the result (\texttt{→-distrib-×}) in Chapter
+\protect\hyperlink{Connectives}{Connectives}.
+
+\hypertarget{exercise--implies--practice}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{⊎∀-implies-∀⊎}
+(practice)}{Exercise ⊎∀-implies-∀⊎ (practice)}}\label{exercise--implies--practice}}
+
+Show that a disjunction of universals implies a universal of
+disjunctions:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{postulate}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaPostulate{⊎∀-implies-∀⊎}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{C}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{(∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊎}}\AgdaSpace{}%
+\AgdaSymbol{(∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{C}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}%
+\>[43]\AgdaSymbol{→}%
+\>[46]\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊎}}\AgdaSpace{}%
+\AgdaBound{C}\AgdaSpace{}%
+\AgdaBound{x}\<%
+\end{code}
+\end{fence}
+
+Does the converse hold? If so, prove; if not, explain why.
+
+\hypertarget{exercise---practice}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{∀-×}
+(practice)}{Exercise ∀-× (practice)}}\label{exercise---practice}}
+
+Consider the following type.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{data}\AgdaSpace{}%
+\AgdaDatatype{Tri}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSpace{}%
+\AgdaKeyword{where}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaInductiveConstructor{aa}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{Tri}\<%
+\\
+%
+\>[2]\AgdaInductiveConstructor{bb}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{Tri}\<%
+\\
+%
+\>[2]\AgdaInductiveConstructor{cc}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{Tri}\<%
+\end{code}
+\end{fence}
+
+Let \texttt{B} be a type indexed by \texttt{Tri}, that is
+\texttt{B\ :\ Tri\ →\ Set}. Show that \texttt{∀\ (x\ :\ Tri)\ →\ B\ x}
+is isomorphic to \texttt{B\ aa\ ×\ B\ bb\ ×\ B\ cc}. Hint: you will need
+to postulate a version of extensionality that works for dependent
+functions.
+
+\hypertarget{existentials}{%
+\section{Existentials}\label{existentials}}
+
+Given a variable \texttt{x} of type \texttt{A} and a proposition
+\texttt{B\ x} which contains \texttt{x} as a free variable, the
+existentially quantified proposition \texttt{Σ{[}\ x\ ∈\ A\ {]}\ B\ x}
+holds if for some term \texttt{M} of type \texttt{A} the proposition
+\texttt{B\ M} holds. Here \texttt{B\ M} stands for the proposition
+\texttt{B\ x} with each free occurrence of \texttt{x} replaced by
+\texttt{M}. Variable \texttt{x} appears free in \texttt{B\ x} but bound
+in \texttt{Σ{[}\ x\ ∈\ A\ {]}\ B\ x}.
+
+We formalise existential quantification by declaring a suitable
+inductive type:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{data}\AgdaSpace{}%
+\AgdaDatatype{Σ}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{B}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSpace{}%
+\AgdaKeyword{where}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaOperator{\AgdaInductiveConstructor{⟨\AgdaUnderscore{},\AgdaUnderscore{}⟩}}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaDatatype{Σ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaBound{B}\<%
+\end{code}
+\end{fence}
+
+We define a convenient syntax for existentials as follows:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{Σ-syntax}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaDatatype{Σ}\<%
+\\
+\>[0]\AgdaKeyword{infix}\AgdaSpace{}%
+\AgdaNumber{2}\AgdaSpace{}%
+\AgdaFunction{Σ-syntax}\<%
+\\
+\>[0]\AgdaKeyword{syntax}\AgdaSpace{}%
+\AgdaFunction{Σ-syntax}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{(λ}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaFunction{Σ[}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaFunction{∈}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaFunction{]}\AgdaSpace{}%
+\AgdaBound{B}\<%
+\end{code}
+\end{fence}
+
+This is our first use of a syntax declaration, which specifies that the
+term on the left may be written with the syntax on the right. The
+special syntax is available only when the identifier \texttt{Σ-syntax}
+is imported.
+
+Evidence that \texttt{Σ{[}\ x\ ∈\ A\ {]}\ B\ x} holds is of the form
+\texttt{⟨\ M\ ,\ N\ ⟩} where \texttt{M} is a term of type \texttt{A},
+and \texttt{N} is evidence that \texttt{B\ M} holds.
+
+Equivalently, we could also declare existentials as a record type:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{record}\AgdaSpace{}%
+\AgdaRecord{Σ′}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{B}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSpace{}%
+\AgdaKeyword{where}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaKeyword{field}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaField{proj₁′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\<%
+\\
+%
+\>[4]\AgdaField{proj₂′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaField{proj₁′}\<%
+\end{code}
+\end{fence}
+
+Here record construction
+
+\begin{myDisplay}
+record
+  { proj₁′ = M
+  ; proj₂′ = N
+  }
+\end{myDisplay}
+
+corresponds to the term
+
+\begin{myDisplay}
+⟨ M , N ⟩
+\end{myDisplay}
+
+where \texttt{M} is a term of type \texttt{A} and \texttt{N} is a term
+of type \texttt{B\ M}.
+
+Products arise as a special case of existentials, where the second
+component does not depend on a variable drawn from the first component.
+When a product is viewed as evidence of a conjunction, both of its
+components are viewed as evidence, whereas when it is viewed as evidence
+of an existential, the first component is viewed as an element of a
+datatype and the second component is viewed as evidence of a proposition
+that depends on the first component. This difference is largely a matter
+of interpretation, since in Agda a value of a type and evidence of a
+proposition are indistinguishable.
+
+Existentials are sometimes referred to as dependent sums, because if
+\texttt{A} is a finite type with values \texttt{x₁\ ,\ ⋯\ ,\ xₙ}, and if
+each of the types \texttt{B\ x₁\ ,\ ⋯\ B\ xₙ} has
+\texttt{m₁\ ,\ ⋯\ ,\ mₙ} distinct members, then
+\texttt{Σ{[}\ x\ ∈\ A\ {]}\ B\ x} has \texttt{m₁\ +\ ⋯\ +\ mₙ} members,
+which explains the choice of notation for existentials, since \texttt{Σ}
+stands for sum.
+
+Existentials are sometimes referred to as dependent products, since
+products arise as a special case. However, that choice of names is
+doubly confusing, since universals also have a claim to the name
+dependent product and since existentials also have a claim to the name
+dependent sum.
+
+A common notation for existentials is \texttt{∃} (analogous to
+\texttt{∀} for universals). We follow the convention of the Agda
+standard library, and reserve this notation for the case where the
+domain of the bound variable is left implicit:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{∃}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{B}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\<%
+\\
+\>[0]\AgdaFunction{∃}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaDatatype{Σ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaBound{B}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0]\AgdaFunction{∃-syntax}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaFunction{∃}\<%
+\\
+\>[0]\AgdaKeyword{syntax}\AgdaSpace{}%
+\AgdaFunction{∃-syntax}\AgdaSpace{}%
+\AgdaSymbol{(λ}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaFunction{∃[}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaFunction{]}\AgdaSpace{}%
+\AgdaBound{B}\<%
+\end{code}
+\end{fence}
+
+The special syntax is available only when the identifier
+\texttt{∃-syntax} is imported. We will tend to use this syntax, since it
+is shorter and more familiar.
+
+Given evidence that \texttt{∀\ x\ →\ B\ x\ →\ C} holds, where \texttt{C}
+does not contain \texttt{x} as a free variable, and given evidence that
+\texttt{∃{[}\ x\ {]}\ B\ x} holds, we may conclude that \texttt{C}
+holds:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{∃-elim}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{B}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{C}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(∀}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{C}\AgdaSymbol{)}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}%
+\>[260I]\AgdaFunction{∃[}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaFunction{]}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{x}\<%
+\\
+\>[.][@{}l@{}]\<[260I]%
+\>[4]\AgdaComment{---------------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{C}\<%
+\\
+\>[0]\AgdaFunction{∃-elim}\AgdaSpace{}%
+\AgdaBound{f}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{f}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaBound{y}\<%
+\end{code}
+\end{fence}
+
+In other words, if we know for every \texttt{x} of type \texttt{A} that
+\texttt{B\ x} implies \texttt{C}, and we know for some \texttt{x} of
+type \texttt{A} that \texttt{B\ x} holds, then we may conclude that
+\texttt{C} holds. This is because we may instantiate that proof that
+\texttt{∀\ x\ →\ B\ x\ →\ C} to any value \texttt{x} of type \texttt{A}
+and any \texttt{y} of type \texttt{B\ x}, and exactly such values are
+provided by the evidence for \texttt{∃{[}\ x\ {]}\ B\ x}.
+
+Indeed, the converse also holds, and the two together form an
+isomorphism:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{∀∃-currying}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{B}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{C}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(∀}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{C}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaRecord{≃}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{∃[}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaFunction{]}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{C}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{∀∃-currying}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaKeyword{record}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{\{}\AgdaSpace{}%
+\AgdaField{to}%
+\>[14]\AgdaSymbol{=}%
+\>[17]\AgdaSymbol{λ\{}\AgdaSpace{}%
+\AgdaBound{f}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{λ\{}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{f}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaSymbol{\}\}}\<%
+\\
+%
+\>[4]\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaField{from}%
+\>[14]\AgdaSymbol{=}%
+\>[17]\AgdaSymbol{λ\{}\AgdaSpace{}%
+\AgdaBound{g}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{λ\{}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{λ\{}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{g}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaSymbol{\}\}\}}\<%
+\\
+%
+\>[4]\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaField{from∘to}\AgdaSpace{}%
+\AgdaSymbol{=}%
+\>[17]\AgdaSymbol{λ\{}\AgdaSpace{}%
+\AgdaBound{f}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\AgdaSpace{}%
+\AgdaSymbol{\}}\<%
+\\
+%
+\>[4]\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaField{to∘from}\AgdaSpace{}%
+\AgdaSymbol{=}%
+\>[17]\AgdaSymbol{λ\{}\AgdaSpace{}%
+\AgdaBound{g}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPostulate{extensionality}\AgdaSpace{}%
+\AgdaSymbol{λ\{}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\AgdaSpace{}%
+\AgdaSymbol{\}\}}\<%
+\\
+%
+\>[4]\AgdaSymbol{\}}\<%
+\end{code}
+\end{fence}
+
+The result can be viewed as a generalisation of currying. Indeed, the
+code to establish the isomorphism is identical to what we wrote when
+discussing \protect\hyperlink{Connectives-implication}{implication}.
+
+\hypertarget{exercise--distrib--recommended-1}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{∃-distrib-⊎}
+(recommended)}{Exercise ∃-distrib-⊎ (recommended)}}\label{exercise--distrib--recommended-1}}
+
+Show that existentials distribute over disjunction:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{postulate}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaPostulate{∃-distrib-⊎}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{C}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaFunction{∃[}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaFunction{]}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊎}}\AgdaSpace{}%
+\AgdaBound{C}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaRecord{≃}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{∃[}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaFunction{]}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊎}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{∃[}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaFunction{]}\AgdaSpace{}%
+\AgdaBound{C}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{exercise--implies--practice-1}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{∃×-implies-×∃}
+(practice)}{Exercise ∃×-implies-×∃ (practice)}}\label{exercise--implies--practice-1}}
+
+Show that an existential of conjunctions implies a conjunction of
+existentials:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{postulate}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaPostulate{∃×-implies-×∃}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{C}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaFunction{∃[}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaFunction{]}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{×}}\AgdaSpace{}%
+\AgdaBound{C}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{∃[}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaFunction{]}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{×}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{∃[}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaFunction{]}\AgdaSpace{}%
+\AgdaBound{C}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+Does the converse hold? If so, prove; if not, explain why.
+
+\hypertarget{exercise---practice-1}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{∃-⊎}
+(practice)}{Exercise ∃-⊎ (practice)}}\label{exercise---practice-1}}
+
+Let \texttt{Tri} and \texttt{B} be as in Exercise \texttt{∀-×}. Show
+that \texttt{∃{[}\ x\ {]}\ B\ x} is isomorphic to
+\texttt{B\ aa\ ⊎\ B\ bb\ ⊎\ B\ cc}.
+
+\hypertarget{an-existential-example}{%
+\section{An existential example}\label{an-existential-example}}
+
+Recall the definitions of \texttt{even} and \texttt{odd} from Chapter
+\protect\hyperlink{Relations}{Relations}:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{data}\AgdaSpace{}%
+\AgdaDatatype{even}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\<%
+\\
+\>[0]\AgdaKeyword{data}\AgdaSpace{}%
+\AgdaDatatype{odd}%
+\>[10]\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0]\AgdaKeyword{data}\AgdaSpace{}%
+\AgdaDatatype{even}\AgdaSpace{}%
+\AgdaKeyword{where}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaInductiveConstructor{even-zero}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{even}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+%
+\>[2]\AgdaInductiveConstructor{even-suc}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{\}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{→}%
+\>[436I]\AgdaDatatype{odd}\AgdaSpace{}%
+\AgdaBound{n}\<%
+\\
+\>[.][@{}l@{}]\<[436I]%
+\>[6]\AgdaComment{------------}\<%
+\\
+%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaDatatype{even}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0]\AgdaKeyword{data}\AgdaSpace{}%
+\AgdaDatatype{odd}\AgdaSpace{}%
+\AgdaKeyword{where}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaInductiveConstructor{odd-suc}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{\}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{→}%
+\>[448I]\AgdaDatatype{even}\AgdaSpace{}%
+\AgdaBound{n}\<%
+\\
+\>[.][@{}l@{}]\<[448I]%
+\>[6]\AgdaComment{-----------}\<%
+\\
+%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaDatatype{odd}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+A number is even if it is zero or the successor of an odd number, and
+odd if it is the successor of an even number.
+
+We will show that a number is even if and only if it is twice some other
+number, and odd if and only if it is one more than twice some other
+number. In other words, we will show:
+
+\texttt{even\ n} iff \texttt{∃{[}\ m\ {]}\ (\ \ \ \ m\ *\ 2\ ≡\ n)}
+
+\texttt{odd\ \ n} iff \texttt{∃{[}\ m\ {]}\ (1\ +\ m\ *\ 2\ ≡\ n)}
+
+By convention, one tends to write constant factors first and to put the
+constant term in a sum last. Here we've reversed each of those
+conventions, because doing so eases the proof.
+
+Here is the proof in the forward direction:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{even-∃}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaDatatype{even}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaFunction{∃[}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaFunction{]}\AgdaSpace{}%
+\AgdaSymbol{(}%
+\>[42]\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{*}}\AgdaSpace{}%
+\AgdaNumber{2}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{odd-∃}%
+\>[7]\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}%
+\>[22]\AgdaDatatype{odd}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaFunction{∃[}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaFunction{]}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaNumber{1}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{*}}\AgdaSpace{}%
+\AgdaNumber{2}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0]\AgdaFunction{even-∃}\AgdaSpace{}%
+\AgdaInductiveConstructor{even-zero}%
+\>[39]\AgdaSymbol{=}%
+\>[42]\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\<%
+\\
+\>[0]\AgdaFunction{even-∃}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{even-suc}\AgdaSpace{}%
+\AgdaBound{o}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaKeyword{with}\AgdaSpace{}%
+\AgdaFunction{odd-∃}\AgdaSpace{}%
+\AgdaBound{o}\<%
+\\
+\>[0]\AgdaSymbol{...}%
+\>[23]\AgdaSymbol{|}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}%
+\>[39]\AgdaSymbol{=}%
+\>[42]\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0]\AgdaFunction{odd-∃}%
+\>[7]\AgdaSymbol{(}\AgdaInductiveConstructor{odd-suc}\AgdaSpace{}%
+\AgdaBound{e}\AgdaSymbol{)}%
+\>[20]\AgdaKeyword{with}\AgdaSpace{}%
+\AgdaFunction{even-∃}\AgdaSpace{}%
+\AgdaBound{e}\<%
+\\
+\>[0]\AgdaSymbol{...}%
+\>[23]\AgdaSymbol{|}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}%
+\>[39]\AgdaSymbol{=}%
+\>[42]\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\<%
+\end{code}
+\end{fence}
+
+We define two mutually recursive functions. Given evidence that
+\texttt{n} is even or odd, we return a number \texttt{m} and evidence
+that \texttt{m\ *\ 2\ ≡\ n} or \texttt{1\ +\ m\ *\ 2\ ≡\ n}. We induct
+over the evidence that \texttt{n} is even or odd:
+
+\begin{itemize}
+\item
+  If the number is even because it is zero, then we return a pair
+  consisting of zero and the evidence that twice zero is zero.
+\item
+  If the number is even because it is one more than an odd number, then
+  we apply the induction hypothesis to give a number \texttt{m} and
+  evidence that \texttt{1\ +\ m\ *\ 2\ ≡\ n}. We return a pair
+  consisting of \texttt{suc\ m} and evidence that
+  \texttt{suc\ m\ *\ 2\ ≡\ suc\ n}, which is immediate after
+  substituting for \texttt{n}.
+\item
+  If the number is odd because it is the successor of an even number,
+  then we apply the induction hypothesis to give a number \texttt{m} and
+  evidence that \texttt{m\ *\ 2\ ≡\ n}. We return a pair consisting of
+  \texttt{suc\ m} and evidence that \texttt{1\ +\ m\ *\ 2\ ≡\ suc\ n},
+  which is immediate after substituting for \texttt{n}.
+\end{itemize}
+
+This completes the proof in the forward direction.
+
+Here is the proof in the reverse direction:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{∃-even}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaFunction{∃[}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaFunction{]}\AgdaSpace{}%
+\AgdaSymbol{(}%
+\>[33]\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{*}}\AgdaSpace{}%
+\AgdaNumber{2}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaDatatype{even}\AgdaSpace{}%
+\AgdaBound{n}\<%
+\\
+\>[0]\AgdaFunction{∃-odd}%
+\>[7]\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaFunction{∃[}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaFunction{]}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaNumber{1}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{*}}\AgdaSpace{}%
+\AgdaNumber{2}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}%
+\>[47]\AgdaDatatype{odd}\AgdaSpace{}%
+\AgdaBound{n}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0]\AgdaFunction{∃-even}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}%
+\>[10]\AgdaInductiveConstructor{zero}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}%
+\>[25]\AgdaSymbol{=}%
+\>[28]\AgdaInductiveConstructor{even-zero}\<%
+\\
+\>[0]\AgdaFunction{∃-even}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}%
+\>[25]\AgdaSymbol{=}%
+\>[28]\AgdaInductiveConstructor{even-suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{∃-odd}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSymbol{)}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0]\AgdaFunction{∃-odd}%
+\>[7]\AgdaOperator{\AgdaInductiveConstructor{⟨}}%
+\>[13]\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}%
+\>[25]\AgdaSymbol{=}%
+\>[28]\AgdaInductiveConstructor{odd-suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{∃-even}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+Given a number that is twice some other number we must show it is even,
+and a number that is one more than twice some other number we must show
+it is odd. We induct over the evidence of the existential, and in the
+even case consider the two possibilities for the number that is doubled:
+
+\begin{itemize}
+\item
+  In the even case for \texttt{zero}, we must show \texttt{zero\ *\ 2}
+  is even, which follows by \texttt{even-zero}.
+\item
+  In the even case for \texttt{suc\ n}, we must show
+  \texttt{suc\ m\ *\ 2} is even. The inductive hypothesis tells us that
+  \texttt{1\ +\ m\ *\ 2} is odd, from which the desired result follows
+  by \texttt{even-suc}.
+\item
+  In the odd case, we must show \texttt{1\ +\ m\ *\ 2} is odd. The
+  inductive hypothesis tell us that \texttt{m\ *\ 2} is even, from which
+  the desired result follows by \texttt{odd-suc}.
+\end{itemize}
+
+This completes the proof in the backward direction.
+
+\hypertarget{exercise--even-odd-practice}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{∃-even-odd}
+(practice)}{Exercise ∃-even-odd (practice)}}\label{exercise--even-odd-practice}}
+
+How do the proofs become more difficult if we replace \texttt{m\ *\ 2}
+and \texttt{1\ +\ m\ *\ 2} by \texttt{2\ *\ m} and
+\texttt{2\ *\ m\ +\ 1}? Rewrite the proofs of \texttt{∃-even} and
+\texttt{∃-odd} when restated in this way.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- Your code goes here}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{exercise----practice}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{∃-\textbar{}-≤}
+(practice)}{Exercise ∃-\textbar-≤ (practice)}}\label{exercise----practice}}
+
+Show that \texttt{y\ ≤\ z} holds if and only if there exists a
+\texttt{x} such that \texttt{x\ +\ y\ ≡\ z}.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- Your code goes here}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{existentials-universals-and-negation}{%
+\section{Existentials, Universals, and
+Negation}\label{existentials-universals-and-negation}}
+
+Negation of an existential is isomorphic to the universal of a negation.
+Considering that existentials are generalised disjunction and universals
+are generalised conjunction, this result is analogous to the one which
+tells us that negation of a disjunction is isomorphic to a conjunction
+of negations:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{¬∃≃∀¬}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{B}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaFunction{∃[}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaFunction{]}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaRecord{≃}}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{x}\<%
+\\
+\>[0]\AgdaFunction{¬∃≃∀¬}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaKeyword{record}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{\{}\AgdaSpace{}%
+\AgdaField{to}%
+\>[14]\AgdaSymbol{=}%
+\>[17]\AgdaSymbol{λ\{}\AgdaSpace{}%
+\AgdaBound{¬∃xy}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{¬∃xy}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaSymbol{\}}\<%
+\\
+%
+\>[4]\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaField{from}%
+\>[14]\AgdaSymbol{=}%
+\>[17]\AgdaSymbol{λ\{}\AgdaSpace{}%
+\AgdaBound{∀¬xy}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{∀¬xy}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaSymbol{\}}\<%
+\\
+%
+\>[4]\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaField{from∘to}\AgdaSpace{}%
+\AgdaSymbol{=}%
+\>[17]\AgdaSymbol{λ\{}\AgdaSpace{}%
+\AgdaBound{¬∃xy}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPostulate{extensionality}\AgdaSpace{}%
+\AgdaSymbol{λ\{}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟨}}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⟩}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\AgdaSpace{}%
+\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\}}\<%
+\\
+%
+\>[4]\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaField{to∘from}\AgdaSpace{}%
+\AgdaSymbol{=}%
+\>[17]\AgdaSymbol{λ\{}\AgdaSpace{}%
+\AgdaBound{∀¬xy}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\AgdaSpace{}%
+\AgdaSymbol{\}}\<%
+\\
+%
+\>[4]\AgdaSymbol{\}}\<%
+\end{code}
+\end{fence}
+
+In the \texttt{to} direction, we are given a value \texttt{¬∃xy} of type
+\texttt{¬\ ∃{[}\ x\ {]}\ B\ x}, and need to show that given a value
+\texttt{x} that \texttt{¬\ B\ x} follows, in other words, from a value
+\texttt{y} of type \texttt{B\ x} we can derive false. Combining
+\texttt{x} and \texttt{y} gives us a value \texttt{⟨\ x\ ,\ y\ ⟩} of
+type \texttt{∃{[}\ x\ {]}\ B\ x}, and applying \texttt{¬∃xy} to that
+yields a contradiction.
+
+In the \texttt{from} direction, we are given a value \texttt{∀¬xy} of
+type \texttt{∀\ x\ →\ ¬\ B\ x}, and need to show that from a value
+\texttt{⟨\ x\ ,\ y\ ⟩} of type \texttt{∃{[}\ x\ {]}\ B\ x} we can derive
+false. Applying \texttt{∀¬xy} to \texttt{x} gives a value of type
+\texttt{¬\ B\ x}, and applying that to \texttt{y} yields a
+contradiction.
+
+The two inverse proofs are straightforward, where one direction requires
+extensionality.
+
+\hypertarget{exercise--implies--recommended}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{∃¬-implies-¬∀}
+(recommended)}{Exercise ∃¬-implies-¬∀ (recommended)}}\label{exercise--implies--recommended}}
+
+Show that existential of a negation implies negation of a universal:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{postulate}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaPostulate{∃¬-implies-¬∀}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{B}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{→}%
+\>[657I]\AgdaFunction{∃[}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaFunction{]}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\<%
+\\
+\>[.][@{}l@{}]\<[657I]%
+\>[6]\AgdaComment{--------------}\<%
+\\
+%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaSymbol{(∀}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+Does the converse hold? If so, prove; if not, explain why.
+
+\hypertarget{Quantifiers-Bin-isomorphism}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{Bin-isomorphism}
+(stretch)}{Exercise Bin-isomorphism (stretch)}}\label{Quantifiers-Bin-isomorphism}}
+
+Recall that Exercises \protect\hyperlink{Naturals-Bin}{Bin},
+\protect\hyperlink{Induction-Bin-laws}{Bin-laws}, and
+\protect\hyperlink{Relations-Bin-predicates}{Bin-predicates} define a
+datatype \texttt{Bin} of bitstrings representing natural numbers, and
+asks you to define the following functions and predicates:
+
+\begin{myDisplay}
+to   : ℕ → Bin
+from : Bin → ℕ
+Can  : Bin → Set
+\end{myDisplay}
+
+And to establish the following properties:
+
+\begin{myDisplay}
+from (to n) ≡ n
+
+----------
+Can (to n)
+
+Can b
+---------------
+to (from b) ≡ b
+\end{myDisplay}
+
+Using the above, establish that there is an isomorphism between
+\texttt{ℕ} and \texttt{∃{[}\ b\ {]}(Can\ b)}.
+
+We recommend proving the following lemmas which show that, for a given
+binary number \texttt{b}, there is only one proof of \texttt{One\ b} and
+similarly for \texttt{Can\ b}.
+
+\begin{myDisplay}
+≡One : ∀{b : Bin} (o o' : One b) → o ≡ o'
+
+≡Can : ∀{b : Bin} (cb : Can b) (cb' : Can b) → cb ≡ cb'
+\end{myDisplay}
+
+Many of the alternatives for proving \texttt{to∘from} turn out to be
+tricky. However, the proof can be straightforward if you use the
+following lemma, which is a corollary of \texttt{≡Can}.
+
+\begin{myDisplay}
+proj₁≡→Can≡ : {cb cb′ : ∃[ b ](Can b)} → proj₁ cb ≡ proj₁ cb′ → cb ≡ cb′
+\end{myDisplay}
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- Your code goes here}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{standard-library}{%
+\section{Standard library}\label{standard-library}}
+
+Definitions similar to those in this chapter can be found in the
+standard library:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{Data.Product}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaRecord{Σ}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{\AgdaUnderscore{},\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaFunction{∃}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaFunction{Σ-syntax}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaFunction{∃-syntax}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{unicode}{%
+\section{Unicode}\label{unicode}}
+
+This chapter uses the following unicode:
+
+\begin{myDisplay}
+Π  U+03A0  GREEK CAPITAL LETTER PI (\Pi)
+Σ  U+03A3  GREEK CAPITAL LETTER SIGMA (\Sigma)
+∃  U+2203  THERE EXISTS (\ex, \exists)
+\end{myDisplay}
+

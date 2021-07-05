@@ -1,0 +1,870 @@
+\hypertarget{Negation}{%
+\chapter{Negation: Negation, with intuitionistic and classical
+logic}\label{Negation}}
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{module}\AgdaSpace{}%
+\AgdaModule{plfa.part1.Negation}\AgdaSpace{}%
+\AgdaKeyword{where}\<%
+\end{code}
+\end{fence}
+
+This chapter introduces negation, and discusses intuitionistic and
+classical logic.
+
+\hypertarget{imports}{%
+\section{Imports}\label{imports}}
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{Relation.Binary.PropositionalEquality}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaDatatype{\AgdaUnderscore{}≡\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{Data.Nat}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaDatatype{ℕ}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{Data.Empty}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaDatatype{⊥}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaFunction{⊥-elim}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{Data.Sum}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaDatatype{\AgdaUnderscore{}⊎\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaInductiveConstructor{inj₁}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaInductiveConstructor{inj₂}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{Data.Product}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaFunction{\AgdaUnderscore{}×\AgdaUnderscore{}}}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{plfa.part1.Isomorphism}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaRecord{\AgdaUnderscore{}≃\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaPostulate{extensionality}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{negation}{%
+\section{Negation}\label{negation}}
+
+Given a proposition \texttt{A}, the negation \texttt{¬\ A} holds if
+\texttt{A} cannot hold. We formalise this idea by declaring negation to
+be the same as implication of false:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaOperator{\AgdaFunction{¬\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\<%
+\\
+\>[0]\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaDatatype{⊥}\<%
+\end{code}
+\end{fence}
+
+This is a form of \emph{reductio ad absurdum}: if assuming \texttt{A}
+leads to the conclusion \texttt{⊥} (an absurdity), then we must have
+\texttt{¬\ A}.
+
+Evidence that \texttt{¬\ A} holds is of the form
+
+\begin{myDisplay}
+λ{ x → N }
+\end{myDisplay}
+
+where \texttt{N} is a term of type \texttt{⊥} containing as a free
+variable \texttt{x} of type \texttt{A}. In other words, evidence that
+\texttt{¬\ A} holds is a function that converts evidence that \texttt{A}
+holds into evidence that \texttt{⊥} holds.
+
+Given evidence that both \texttt{¬\ A} and \texttt{A} hold, we can
+conclude that \texttt{⊥} holds. In other words, if both \texttt{¬\ A}
+and \texttt{A} hold, then we have a contradiction:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{¬-elim}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaBound{A}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}%
+\>[49I]\AgdaBound{A}\<%
+\\
+\>[.][@{}l@{}]\<[49I]%
+\>[4]\AgdaComment{---}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaDatatype{⊥}\<%
+\\
+\>[0]\AgdaFunction{¬-elim}\AgdaSpace{}%
+\AgdaBound{¬x}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{¬x}\AgdaSpace{}%
+\AgdaBound{x}\<%
+\end{code}
+\end{fence}
+
+Here we write \texttt{¬x} for evidence of \texttt{¬\ A} and \texttt{x}
+for evidence of \texttt{A}. This means that \texttt{¬x} must be a
+function of type \texttt{A\ →\ ⊥}, and hence the application
+\texttt{¬x\ x} must be of type \texttt{⊥}. Note that this rule is just a
+special case of \texttt{→-elim}.
+
+We set the precedence of negation so that it binds more tightly than
+disjunction and conjunction, but less tightly than anything else:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{infix}\AgdaSpace{}%
+\AgdaNumber{3}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{¬\AgdaUnderscore{}}}\<%
+\end{code}
+\end{fence}
+
+Thus, \texttt{¬\ A\ ×\ ¬\ B} parses as \texttt{(¬\ A)\ ×\ (¬\ B)} and
+\texttt{¬\ m\ ≡\ n} as \texttt{¬\ (m\ ≡\ n)}.
+
+In \emph{classical} logic, we have that \texttt{A} is equivalent to
+\texttt{¬\ ¬\ A}. As we discuss below, in Agda we use
+\emph{intuitionistic} logic, where we have only half of this
+equivalence, namely that \texttt{A} implies \texttt{¬\ ¬\ A}:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{¬¬-intro}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[63I]\AgdaBound{A}\<%
+\\
+\>[.][@{}l@{}]\<[63I]%
+\>[4]\AgdaComment{-----}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaBound{A}\<%
+\\
+\>[0]\AgdaFunction{¬¬-intro}\AgdaSpace{}%
+\AgdaBound{x}%
+\>[12]\AgdaSymbol{=}%
+\>[15]\AgdaSymbol{λ\{}\AgdaBound{¬x}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{¬x}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{\}}\<%
+\end{code}
+\end{fence}
+
+Let \texttt{x} be evidence of \texttt{A}. We show that assuming
+\texttt{¬\ A} leads to a contradiction, and hence \texttt{¬\ ¬\ A} must
+hold. Let \texttt{¬x} be evidence of \texttt{¬\ A}. Then from \texttt{A}
+and \texttt{¬\ A} we have a contradiction, evidenced by \texttt{¬x\ x}.
+Hence, we have shown \texttt{¬\ ¬\ A}.
+
+An equivalent way to write the above is as follows:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{¬¬-intro′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[76I]\AgdaBound{A}\<%
+\\
+\>[.][@{}l@{}]\<[76I]%
+\>[4]\AgdaComment{-----}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaBound{A}\<%
+\\
+\>[0]\AgdaFunction{¬¬-intro′}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaBound{¬x}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{¬x}\AgdaSpace{}%
+\AgdaBound{x}\<%
+\end{code}
+\end{fence}
+
+Here we have simply converted the argument of the lambda term to an
+additional argument of the function. We will usually use this latter
+style, as it is more compact.
+
+We cannot show that \texttt{¬\ ¬\ A} implies \texttt{A}, but we can show
+that \texttt{¬\ ¬\ ¬\ A} implies \texttt{¬\ A}:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{¬¬¬-elim}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[90I]\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaBound{A}\<%
+\\
+\>[.][@{}l@{}]\<[90I]%
+\>[4]\AgdaComment{-------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaBound{A}\<%
+\\
+\>[0]\AgdaFunction{¬¬¬-elim}\AgdaSpace{}%
+\AgdaBound{¬¬¬x}%
+\>[15]\AgdaSymbol{=}%
+\>[18]\AgdaSymbol{λ}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{¬¬¬x}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{¬¬-intro}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+Let \texttt{¬¬¬x} be evidence of \texttt{¬\ ¬\ ¬\ A}. We will show that
+assuming \texttt{A} leads to a contradiction, and hence \texttt{¬\ A}
+must hold. Let \texttt{x} be evidence of \texttt{A}. Then by the
+previous result, we can conclude \texttt{¬\ ¬\ A}, evidenced by
+\texttt{¬¬-intro\ x}. Then from \texttt{¬\ ¬\ ¬\ A} and \texttt{¬\ ¬\ A}
+we have a contradiction, evidenced by \texttt{¬¬¬x\ (¬¬-intro\ x)}.
+Hence we have shown \texttt{¬\ A}.
+
+Another law of logic is \emph{contraposition}, stating that if
+\texttt{A} implies \texttt{B}, then \texttt{¬\ B} implies \texttt{¬\ A}:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{contraposition}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[108I]\AgdaSymbol{(}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSymbol{)}\<%
+\\
+\>[.][@{}l@{}]\<[108I]%
+\>[4]\AgdaComment{-----------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{contraposition}\AgdaSpace{}%
+\AgdaBound{f}\AgdaSpace{}%
+\AgdaBound{¬y}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{¬y}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{f}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+Let \texttt{f} be evidence of \texttt{A\ →\ B} and let \texttt{¬y} be
+evidence of \texttt{¬\ B}. We will show that assuming \texttt{A} leads
+to a contradiction, and hence \texttt{¬\ A} must hold. Let \texttt{x} be
+evidence of \texttt{A}. Then from \texttt{A\ →\ B} and \texttt{A} we may
+conclude \texttt{B}, evidenced by \texttt{f\ x}, and from \texttt{B} and
+\texttt{¬\ B} we may conclude \texttt{⊥}, evidenced by
+\texttt{¬y\ (f\ x)}. Hence, we have shown \texttt{¬\ A}.
+
+Using negation, it is straightforward to define inequality:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaOperator{\AgdaFunction{\AgdaUnderscore{}≢\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\<%
+\\
+\>[0]\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{≢}}\AgdaSpace{}%
+\AgdaBound{y}%
+\>[7]\AgdaSymbol{=}%
+\>[10]\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{y}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+It is trivial to show distinct numbers are not equal:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{\AgdaUnderscore{}}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaNumber{1}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{≢}}\AgdaSpace{}%
+\AgdaNumber{2}\<%
+\\
+\>[0]\AgdaSymbol{\AgdaUnderscore{}}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaSymbol{λ()}\<%
+\end{code}
+\end{fence}
+
+This is our first use of an absurd pattern in a lambda expression. The
+type \texttt{M\ ≡\ N} is occupied exactly when \texttt{M} and \texttt{N}
+simplify to identical terms. Since \texttt{1} and \texttt{2} simplify to
+distinct normal forms, Agda determines that there is no possible
+evidence that \texttt{1\ ≡\ 2}. As a second example, it is also easy to
+validate Peano's postulate that zero is not the successor of any number:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{peano}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{m}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{≢}}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{m}\<%
+\\
+\>[0]\AgdaFunction{peano}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaSymbol{λ()}\<%
+\end{code}
+\end{fence}
+
+The evidence is essentially the same, as the absurd pattern matches all
+possible evidence of type \texttt{zero\ ≡\ suc\ m}.
+
+Given the correspondence of implication to exponentiation and false to
+the type with no members, we can view negation as raising to the zero
+power. This indeed corresponds to what we know for arithmetic, where
+
+\begin{myDisplay}
+0 ^ n  ≡  1,  if n ≡ 0
+       ≡  0,  if n ≢ 0
+\end{myDisplay}
+
+Indeed, there is exactly one proof of \texttt{⊥\ →\ ⊥}. We can write
+this proof two different ways:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{id}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{⊥}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaDatatype{⊥}\<%
+\\
+\>[0]\AgdaFunction{id}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{x}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0]\AgdaFunction{id′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{⊥}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaDatatype{⊥}\<%
+\\
+\>[0]\AgdaFunction{id′}\AgdaSpace{}%
+\AgdaSymbol{()}\<%
+\end{code}
+\end{fence}
+
+But, using extensionality, we can prove these equal:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{id≡id′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaFunction{id}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaFunction{id′}\<%
+\\
+\>[0]\AgdaFunction{id≡id′}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaPostulate{extensionality}\AgdaSpace{}%
+\AgdaSymbol{(λ())}\<%
+\end{code}
+\end{fence}
+
+By extensionality, \texttt{id\ ≡\ id′} holds if for every \texttt{x} in
+their domain we have \texttt{id\ x\ ≡\ id′\ x}. But there is no
+\texttt{x} in their domain, so the equality holds trivially.
+
+Indeed, we can show any two proofs of a negation are equal:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{assimilation}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{¬x}\AgdaSpace{}%
+\AgdaBound{¬x′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{¬x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{¬x′}\<%
+\\
+\>[0]\AgdaFunction{assimilation}\AgdaSpace{}%
+\AgdaBound{¬x}\AgdaSpace{}%
+\AgdaBound{¬x′}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaPostulate{extensionality}\AgdaSpace{}%
+\AgdaSymbol{(λ}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaFunction{⊥-elim}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{¬x}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{))}\<%
+\end{code}
+\end{fence}
+
+Evidence for \texttt{¬\ A} implies that any evidence of \texttt{A}
+immediately leads to a contradiction. But extensionality quantifies over
+all \texttt{x} such that \texttt{A} holds, hence any such \texttt{x}
+immediately leads to a contradiction, again causing the equality to hold
+trivially.
+
+\hypertarget{exercise--irreflexive-recommended}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{\textless{}-irreflexive}
+(recommended)}{Exercise \textless-irreflexive (recommended)}}\label{exercise--irreflexive-recommended}}
+
+Using negation, show that
+\protect\hyperlink{Relations-strict-inequality}{strict inequality} is
+irreflexive, that is, \texttt{n\ \textless{}\ n} holds for no
+\texttt{n}.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- Your code goes here}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{exercise-trichotomy-practice}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{trichotomy}
+(practice)}{Exercise trichotomy (practice)}}\label{exercise-trichotomy-practice}}
+
+Show that strict inequality satisfies
+\protect\hyperlink{Relations-trichotomy}{trichotomy}, that is, for any
+naturals \texttt{m} and \texttt{n} exactly one of the following holds:
+
+\begin{itemize}
+\tightlist
+\item
+  \texttt{m\ \textless{}\ n}
+\item
+  \texttt{m\ ≡\ n}
+\item
+  \texttt{m\ \textgreater{}\ n}
+\end{itemize}
+
+Here ``exactly one'' means that not only one of the three must hold, but
+that when one holds the negation of the other two must also hold.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- Your code goes here}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{exercise--dual--recommended}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{⊎-dual-×}
+(recommended)}{Exercise ⊎-dual-× (recommended)}}\label{exercise--dual--recommended}}
+
+Show that conjunction, disjunction, and negation are related by a
+version of De Morgan's Law.
+
+\begin{myDisplay}
+¬ (A ⊎ B) ≃ (¬ A) × (¬ B)
+\end{myDisplay}
+
+This result is an easy consequence of something we've proved previously.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- Your code goes here}\<%
+\end{code}
+\end{fence}
+
+Do we also have the following?
+
+\begin{myDisplay}
+¬ (A × B) ≃ (¬ A) ⊎ (¬ B)
+\end{myDisplay}
+
+If so, prove; if not, can you give a relation weaker than isomorphism
+that relates the two sides?
+
+\hypertarget{intuitive-and-classical-logic}{%
+\section{Intuitive and Classical
+logic}\label{intuitive-and-classical-logic}}
+
+In Gilbert and Sullivan's \emph{The Gondoliers}, Casilda is told that as
+an infant she was married to the heir of the King of Batavia, but that
+due to a mix-up no one knows which of two individuals, Marco or
+Giuseppe, is the heir. Alarmed, she wails ``Then do you mean to say that
+I am married to one of two gondoliers, but it is impossible to say
+which?'' To which the response is ``Without any doubt of any kind
+whatever.''
+
+Logic comes in many varieties, and one distinction is between
+\emph{classical} and \emph{intuitionistic}. Intuitionists, concerned by
+assumptions made by some logicians about the nature of infinity, insist
+upon a constructionist notion of truth. In particular, they insist that
+a proof of \texttt{A\ ⊎\ B} must show \emph{which} of \texttt{A} or
+\texttt{B} holds, and hence they would reject the claim that Casilda is
+married to Marco or Giuseppe until one of the two was identified as her
+husband. Perhaps Gilbert and Sullivan anticipated intuitionism, for
+their story's outcome is that the heir turns out to be a third
+individual, Luiz, with whom Casilda is, conveniently, already in love.
+
+Intuitionists also reject the law of the excluded middle, which asserts
+\texttt{A\ ⊎\ ¬\ A} for every \texttt{A}, since the law gives no clue as
+to \emph{which} of \texttt{A} or \texttt{¬\ A} holds. Heyting formalised
+a variant of Hilbert's classical logic that captures the intuitionistic
+notion of provability. In particular, the law of the excluded middle is
+provable in Hilbert's logic, but not in Heyting's. Further, if the law
+of the excluded middle is added as an axiom to Heyting's logic, then it
+becomes equivalent to Hilbert's. Kolmogorov showed the two logics were
+closely related: he gave a double-negation translation, such that a
+formula is provable in classical logic if and only if its translation is
+provable in intuitionistic logic.
+
+Propositions as Types was first formulated for intuitionistic logic. It
+is a perfect fit, because in the intuitionist interpretation the formula
+\texttt{A\ ⊎\ B} is provable exactly when one exhibits either a proof of
+\texttt{A} or a proof of \texttt{B}, so the type corresponding to
+disjunction is a disjoint sum.
+
+(Parts of the above are adopted from ``Propositions as Types'', Philip
+Wadler, \emph{Communications of the ACM}, December 2015.)
+
+\hypertarget{excluded-middle-is-irrefutable}{%
+\section{Excluded middle is
+irrefutable}\label{excluded-middle-is-irrefutable}}
+
+The law of the excluded middle can be formulated as follows:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{postulate}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaPostulate{em}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊎}}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaBound{A}\<%
+\end{code}
+\end{fence}
+
+As we noted, the law of the excluded middle does not hold in
+intuitionistic logic. However, we can show that it is
+\emph{irrefutable}, meaning that the negation of its negation is
+provable (and hence that its negation is never provable):
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{em-irrefutable}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{A}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊎}}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{em-irrefutable}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaSymbol{λ}\AgdaSpace{}%
+\AgdaBound{k}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{k}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{inj₂}\AgdaSpace{}%
+\AgdaSymbol{(λ}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{k}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{inj₁}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)))}\<%
+\end{code}
+\end{fence}
+
+The best way to explain this code is to develop it interactively:
+
+\begin{myDisplay}
+em-irrefutable k = ?
+\end{myDisplay}
+
+Given evidence \texttt{k} that \texttt{¬\ (A\ ⊎\ ¬\ A)}, that is, a
+function that given a value of type \texttt{A\ ⊎\ ¬\ A} returns a value
+of the empty type, we must fill in \texttt{?} with a term that returns a
+value of the empty type. The only way we can get a value of the empty
+type is by applying \texttt{k} itself, so let's expand the hole
+accordingly:
+
+\begin{myDisplay}
+em-irrefutable k = k ?
+\end{myDisplay}
+
+We need to fill the new hole with a value of type \texttt{A\ ⊎\ ¬\ A}.
+We don't have a value of type \texttt{A} to hand, so let's pick the
+second disjunct:
+
+\begin{myDisplay}
+em-irrefutable k = k (inj₂ λ{ x → ? })
+\end{myDisplay}
+
+The second disjunct accepts evidence of \texttt{¬\ A}, that is, a
+function that given a value of type \texttt{A} returns a value of the
+empty type. We bind \texttt{x} to the value of type \texttt{A}, and now
+we need to fill in the hole with a value of the empty type. Once again,
+the only way we can get a value of the empty type is by applying
+\texttt{k} itself, so let's expand the hole accordingly:
+
+\begin{myDisplay}
+em-irrefutable k = k (inj₂ λ{ x → k ? })
+\end{myDisplay}
+
+This time we do have a value of type \texttt{A} to hand, namely
+\texttt{x}, so we can pick the first disjunct:
+
+\begin{myDisplay}
+em-irrefutable k = k (inj₂ λ{ x → k (inj₁ x) })
+\end{myDisplay}
+
+There are no holes left! This completes the proof.
+
+The following story illustrates the behaviour of the term we have
+created. (With apologies to Peter Selinger, who tells a similar story
+about a king, a wizard, and the Philosopher's stone.)
+
+Once upon a time, the devil approached a man and made an offer: ``Either
+(a) I will give you one billion dollars, or (b) I will grant you any
+wish if you pay me one billion dollars. Of course, I get to choose
+whether I offer (a) or (b).''
+
+The man was wary. Did he need to sign over his soul? No, said the devil,
+all the man need do is accept the offer.
+
+The man pondered. If he was offered (b) it was unlikely that he would
+ever be able to buy the wish, but what was the harm in having the
+opportunity available?
+
+``I accept,'' said the man at last. ``Do I get (a) or (b)?''
+
+The devil paused. ``I choose (b).''
+
+The man was disappointed but not surprised. That was that, he thought.
+But the offer gnawed at him. Imagine what he could do with his wish!
+Many years passed, and the man began to accumulate money. To get the
+money he sometimes did bad things, and dimly he realised that this must
+be what the devil had in mind. Eventually he had his billion dollars,
+and the devil appeared again.
+
+``Here is a billion dollars,'' said the man, handing over a valise
+containing the money. ``Grant me my wish!''
+
+The devil took possession of the valise. Then he said, ``Oh, did I say
+(b) before? I'm so sorry. I meant (a). It is my great pleasure to give
+you one billion dollars.''
+
+And the devil handed back to the man the same valise that the man had
+just handed to him.
+
+(Parts of the above are adopted from ``Call-by-Value is Dual to
+Call-by-Name'', Philip Wadler, \emph{International Conference on
+Functional Programming}, 2003.)
+
+\hypertarget{exercise-classical-stretch}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{Classical}
+(stretch)}{Exercise Classical (stretch)}}\label{exercise-classical-stretch}}
+
+Consider the following principles:
+
+\begin{itemize}
+\tightlist
+\item
+  Excluded Middle: \texttt{A\ ⊎\ ¬\ A}, for all \texttt{A}
+\item
+  Double Negation Elimination: \texttt{¬\ ¬\ A\ →\ A}, for all
+  \texttt{A}
+\item
+  Peirce's Law: \texttt{((A\ →\ B)\ →\ A)\ →\ A}, for all \texttt{A} and
+  \texttt{B}.
+\item
+  Implication as disjunction: \texttt{(A\ →\ B)\ →\ ¬\ A\ ⊎\ B}, for all
+  \texttt{A} and \texttt{B}.
+\item
+  De Morgan: \texttt{¬\ (¬\ A\ ×\ ¬\ B)\ →\ A\ ⊎\ B}, for all \texttt{A}
+  and \texttt{B}.
+\end{itemize}
+
+Show that each of these implies all the others.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- Your code goes here}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{exercise-stable-stretch}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{Stable}
+(stretch)}{Exercise Stable (stretch)}}\label{exercise-stable-stretch}}
+
+Say that a formula is \emph{stable} if double negation elimination holds
+for it:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{Stable}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\<%
+\\
+\>[0]\AgdaFunction{Stable}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{¬}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{A}\<%
+\end{code}
+\end{fence}
+
+Show that any negated formula is stable, and that the conjunction of two
+stable formulas is stable.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- Your code goes here}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{standard-prelude}{%
+\section{Standard Prelude}\label{standard-prelude}}
+
+Definitions similar to those in this chapter can be found in the
+standard library:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{Relation.Nullary}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaFunction{¬\AgdaUnderscore{}}}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{Relation.Nullary.Negation}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{contraposition}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{unicode}{%
+\section{Unicode}\label{unicode}}
+
+This chapter uses the following unicode:
+
+\begin{myDisplay}
+¬  U+00AC  NOT SIGN (\neg)
+≢  U+2262  NOT IDENTICAL TO (\==n)
+\end{myDisplay}
+

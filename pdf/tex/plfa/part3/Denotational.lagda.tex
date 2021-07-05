@@ -1,0 +1,1689 @@
+\hypertarget{Denotational}{%
+\chapter{Denotational: Denotational semantics of untyped lambda
+calculus}\label{Denotational}}
+
+\begin{fence}
+\begin{code}
+module plfa.part3.Denotational where
+\end{code}
+\end{fence}
+
+The lambda calculus is a language about \emph{functions}, that is,
+mappings from input to output. In computing we often think of such
+mappings as being carried out by a sequence of operations that transform
+an input into an output. But functions can also be represented as data.
+For example, one can tabulate a function, that is, create a table where
+each row has two entries, an input and the corresponding output for the
+function. Function application is then the process of looking up the row
+for a given input and reading off the output.
+
+We shall create a semantics for the untyped lambda calculus based on
+this idea of functions-as-tables. However, there are two difficulties
+that arise. First, functions often have an infinite domain, so it would
+seem that we would need infinitely long tables to represent functions.
+Second, in the lambda calculus, functions can be applied to functions.
+They can even be applied to themselves! So it would seem that the tables
+would contain cycles. One might start to worry that advanced techniques
+are necessary to address these issues, but fortunately this is not the
+case!
+
+The first problem, of functions with infinite domains, is solved by
+observing that in the execution of a terminating program, each lambda
+abstraction will only be applied to a finite number of distinct
+arguments. (We come back later to discuss diverging programs.) This
+observation is another way of looking at Dana Scott's insight that only
+continuous functions are needed to model the lambda calculus.
+
+The second problem, that of self-application, is solved by relaxing the
+way in which we lookup an argument in a function's table. Naively, one
+would look in the table for a row in which the input entry exactly
+matches the argument. In the case of self-application, this would
+require the table to contain a copy of itself. Impossible! (At least, it
+is impossible if we want to build tables using inductive data type
+definitions, which indeed we do.) Instead it is sufficient to find an
+input such that every row of the input appears as a row of the argument
+(that is, the input is a subset of the argument). In the case of
+self-application, the table only needs to contain a smaller copy of
+itself, which is fine.
+
+With these two observations in hand, it is straightforward to write down
+a denotational semantics of the lambda calculus.
+
+\hypertarget{imports}{%
+\section{Imports}\label{imports}}
+
+\begin{fence}
+\begin{code}
+open import Agda.Primitive using (lzero; lsuc)
+open import Data.Empty using (⊥-elim)
+open import Data.Nat using (ℕ; zero; suc)
+open import Data.Product using (_×_; Σ; Σ-syntax; ∃; ∃-syntax; proj₁; proj₂)
+  renaming (_,_ to ⟨_,_⟩)
+open import Data.Sum
+open import Data.Vec using (Vec; []; _∷_)
+open import Relation.Binary.PropositionalEquality
+  using (_≡_; _≢_; refl; sym; cong; cong₂; cong-app)
+open import Relation.Nullary using (¬_)
+open import Relation.Nullary.Negation using (contradiction)
+open import Function using (_∘_)
+open import plfa.part2.Untyped
+  using (Context; ★; _∋_; ∅; _,_; Z; S_; _⊢_; `_; _·_; ƛ_;
+         #_; twoᶜ; ext; rename; exts; subst; subst-zero; _[_])
+open import plfa.part2.Substitution using (Rename; extensionality; rename-id)
+\end{code}
+\end{fence}
+
+\hypertarget{values}{%
+\section{Values}\label{values}}
+
+The \texttt{Value} data type represents a finite portion of a function.
+We think of a value as a finite set of pairs that represent input-output
+mappings. The \texttt{Value} data type represents the set as a binary
+tree whose internal nodes are the union operator and whose leaves
+represent either a single mapping or the empty set.
+
+\begin{itemize}
+\item
+  The ⊥ value provides no information about the computation.
+\item
+  A value of the form \texttt{v\ ↦\ w} is a single input-output mapping,
+  from input \texttt{v} to output \texttt{w}.
+\item
+  A value of the form \texttt{v\ ⊔\ w} is a function that maps inputs to
+  outputs according to both \texttt{v} and \texttt{w}. Think of it as
+  taking the union of the two sets.
+\end{itemize}
+
+\begin{fence}
+\begin{code}
+infixr 7 _↦_
+infixl 5 _⊔_
+
+data Value : Set where
+  ⊥ : Value
+  _↦_ : Value → Value → Value
+  _⊔_ : Value → Value → Value
+\end{code}
+\end{fence}
+
+The \texttt{⊑} relation adapts the familiar notion of subset to the
+Value data type. This relation plays the key role in enabling
+self-application. There are two rules that are specific to functions,
+\texttt{⊑-fun} and \texttt{⊑-dist}, which we discuss below.
+
+\begin{fence}
+\begin{code}
+infix 4 _⊑_
+
+data _⊑_ : Value → Value → Set where
+
+  ⊑-bot : ∀ {v} → ⊥ ⊑ v
+
+  ⊑-conj-L : ∀ {u v w}
+    → v ⊑ u
+    → w ⊑ u
+      -----------
+    → (v ⊔ w) ⊑ u
+
+  ⊑-conj-R1 : ∀ {u v w}
+    → u ⊑ v
+      -----------
+    → u ⊑ (v ⊔ w)
+
+  ⊑-conj-R2 : ∀ {u v w}
+    → u ⊑ w
+      -----------
+    → u ⊑ (v ⊔ w)
+
+  ⊑-trans : ∀ {u v w}
+    → u ⊑ v
+    → v ⊑ w
+      -----
+    → u ⊑ w
+
+  ⊑-fun : ∀ {v w v′ w′}
+    → v′ ⊑ v
+    → w ⊑ w′
+      -------------------
+    → (v ↦ w) ⊑ (v′ ↦ w′)
+
+  ⊑-dist : ∀{v w w′}
+      ---------------------------------
+    → v ↦ (w ⊔ w′) ⊑ (v ↦ w) ⊔ (v ↦ w′)
+\end{code}
+\end{fence}
+
+The first five rules are straightforward. The rule \texttt{⊑-fun}
+captures when it is OK to match a higher-order argument
+\texttt{v′\ ↦\ w′} to a table entry whose input is \texttt{v\ ↦\ w}.
+Considering a call to the higher-order argument. It is OK to pass a
+larger argument than expected, so \texttt{v} can be larger than
+\texttt{v′}. Also, it is OK to disregard some of the output, so
+\texttt{w} can be smaller than \texttt{w′}. The rule \texttt{⊑-dist}
+says that if you have two entries for the same input, then you can
+combine them into a single entry and joins the two outputs.
+
+The \texttt{⊑} relation is reflexive.
+
+\begin{fence}
+\begin{code}
+⊑-refl : ∀ {v} → v ⊑ v
+⊑-refl {⊥} = ⊑-bot
+⊑-refl {v ↦ v′} = ⊑-fun ⊑-refl ⊑-refl
+⊑-refl {v₁ ⊔ v₂} = ⊑-conj-L (⊑-conj-R1 ⊑-refl) (⊑-conj-R2 ⊑-refl)
+\end{code}
+\end{fence}
+
+The \texttt{⊔} operation is monotonic with respect to \texttt{⊑}, that
+is, given two larger values it produces a larger value.
+
+\begin{fence}
+\begin{code}
+⊔⊑⊔ : ∀ {v w v′ w′}
+  → v ⊑ v′  →  w ⊑ w′
+    -----------------------
+  → (v ⊔ w) ⊑ (v′ ⊔ w′)
+⊔⊑⊔ d₁ d₂ = ⊑-conj-L (⊑-conj-R1 d₁) (⊑-conj-R2 d₂)
+\end{code}
+\end{fence}
+
+The \texttt{⊑-dist} rule can be used to combine two entries even when
+the input values are not identical. One can first combine the two inputs
+using ⊔ and then apply the \texttt{⊑-dist} rule to obtain the following
+property.
+
+\begin{fence}
+\begin{code}
+⊔↦⊔-dist : ∀{v v′ w w′ : Value}
+  → (v ⊔ v′) ↦ (w ⊔ w′) ⊑ (v ↦ w) ⊔ (v′ ↦ w′)
+⊔↦⊔-dist = ⊑-trans ⊑-dist (⊔⊑⊔ (⊑-fun (⊑-conj-R1 ⊑-refl) ⊑-refl)
+                            (⊑-fun (⊑-conj-R2 ⊑-refl) ⊑-refl))
+\end{code}
+\end{fence}
+
+If the join \texttt{u\ ⊔\ v} is less than another value \texttt{w}, then
+both \texttt{u} and \texttt{v} are less than \texttt{w}.
+
+\begin{fence}
+\begin{code}
+⊔⊑-invL : ∀{u v w : Value}
+  → u ⊔ v ⊑ w
+    ---------
+  → u ⊑ w
+⊔⊑-invL (⊑-conj-L lt1 lt2) = lt1
+⊔⊑-invL (⊑-conj-R1 lt) = ⊑-conj-R1 (⊔⊑-invL lt)
+⊔⊑-invL (⊑-conj-R2 lt) = ⊑-conj-R2 (⊔⊑-invL lt)
+⊔⊑-invL (⊑-trans lt1 lt2) = ⊑-trans (⊔⊑-invL lt1) lt2
+
+⊔⊑-invR : ∀{u v w : Value}
+  → u ⊔ v ⊑ w
+    ---------
+  → v ⊑ w
+⊔⊑-invR (⊑-conj-L lt1 lt2) = lt2
+⊔⊑-invR (⊑-conj-R1 lt) = ⊑-conj-R1 (⊔⊑-invR lt)
+⊔⊑-invR (⊑-conj-R2 lt) = ⊑-conj-R2 (⊔⊑-invR lt)
+⊔⊑-invR (⊑-trans lt1 lt2) = ⊑-trans (⊔⊑-invR lt1) lt2
+\end{code}
+\end{fence}
+
+\hypertarget{environments}{%
+\section{Environments}\label{environments}}
+
+An environment gives meaning to the free variables in a term by mapping
+variables to values.
+
+\begin{fence}
+\begin{code}
+Env : Context → Set
+Env Γ = ∀ (x : Γ ∋ ★) → Value
+\end{code}
+\end{fence}
+
+We have the empty environment, and we can extend an environment.
+
+\begin{fence}
+\begin{code}
+`∅ : Env ∅
+`∅ ()
+
+infixl 5 _`,_
+
+_`,_ : ∀ {Γ} → Env Γ → Value → Env (Γ , ★)
+(γ `, v) Z = v
+(γ `, v) (S x) = γ x
+\end{code}
+\end{fence}
+
+We can recover the previous environment from an extended environment,
+and the last value. Putting them together again takes us back to where
+we started.
+
+\begin{fence}
+\begin{code}
+init : ∀ {Γ} → Env (Γ , ★) → Env Γ
+init γ x = γ (S x)
+
+last : ∀ {Γ} → Env (Γ , ★) → Value
+last γ = γ Z
+
+init-last : ∀ {Γ} → (γ : Env (Γ , ★)) → γ ≡ (init γ `, last γ)
+init-last {Γ} γ = extensionality lemma
+  where lemma : ∀ (x : Γ , ★ ∋ ★) → γ x ≡ (init γ `, last γ) x
+        lemma Z      =  refl
+        lemma (S x)  =  refl
+\end{code}
+\end{fence}
+
+We extend the \texttt{⊑} relation point-wise to environments with the
+following definition.
+
+\begin{fence}
+\begin{code}
+_`⊑_ : ∀ {Γ} → Env Γ → Env Γ → Set
+_`⊑_ {Γ} γ δ = ∀ (x : Γ ∋ ★) → γ x ⊑ δ x
+\end{code}
+\end{fence}
+
+We define a bottom environment and a join operator on environments,
+which takes the point-wise join of their values.
+
+\begin{fence}
+\begin{code}
+`⊥ : ∀ {Γ} → Env Γ
+`⊥ x = ⊥
+
+_`⊔_ : ∀ {Γ} → Env Γ → Env Γ → Env Γ
+(γ `⊔ δ) x = γ x ⊔ δ x
+\end{code}
+\end{fence}
+
+The \texttt{⊑-refl}, \texttt{⊑-conj-R1}, and \texttt{⊑-conj-R2} rules
+lift to environments. So the join of two environments \texttt{γ} and
+\texttt{δ} is greater than the first environment \texttt{γ} or the
+second environment \texttt{δ}.
+
+\begin{fence}
+\begin{code}
+`⊑-refl : ∀ {Γ} {γ : Env Γ} → γ `⊑ γ
+`⊑-refl {Γ} {γ} x = ⊑-refl {γ x}
+
+⊑-env-conj-R1 : ∀ {Γ} → (γ : Env Γ) → (δ : Env Γ) → γ `⊑ (γ `⊔ δ)
+⊑-env-conj-R1 γ δ x = ⊑-conj-R1 ⊑-refl
+
+⊑-env-conj-R2 : ∀ {Γ} → (γ : Env Γ) → (δ : Env Γ) → δ `⊑ (γ `⊔ δ)
+⊑-env-conj-R2 γ δ x = ⊑-conj-R2 ⊑-refl
+\end{code}
+\end{fence}
+
+\hypertarget{denotational-semantics}{%
+\section{Denotational Semantics}\label{denotational-semantics}}
+
+We define the semantics with a judgment of the form
+\texttt{ρ\ ⊢\ M\ ↓\ v}, where \texttt{ρ} is the environment, \texttt{M}
+the program, and \texttt{v} is a result value. For readers familiar with
+big-step semantics, this notation will feel quite natural, but don't let
+the similarity fool you. There are subtle but important differences! So
+here is the definition of the semantics, which we discuss in detail in
+the following paragraphs.
+
+\begin{fence}
+\begin{code}
+infix 3 _⊢_↓_
+
+data _⊢_↓_ : ∀{Γ} → Env Γ → (Γ ⊢ ★) → Value → Set where
+
+  var : ∀ {Γ} {γ : Env Γ} {x}
+      ---------------
+    → γ ⊢ (` x) ↓ γ x
+
+  ↦-elim : ∀ {Γ} {γ : Env Γ} {L M v w}
+    → γ ⊢ L ↓ (v ↦ w)
+    → γ ⊢ M ↓ v
+      ---------------
+    → γ ⊢ (L · M) ↓ w
+
+  ↦-intro : ∀ {Γ} {γ : Env Γ} {N v w}
+    → γ `, v ⊢ N ↓ w
+      -------------------
+    → γ ⊢ (ƛ N) ↓ (v ↦ w)
+
+  ⊥-intro : ∀ {Γ} {γ : Env Γ} {M}
+      ---------
+    → γ ⊢ M ↓ ⊥
+
+  ⊔-intro : ∀ {Γ} {γ : Env Γ} {M v w}
+    → γ ⊢ M ↓ v
+    → γ ⊢ M ↓ w
+      ---------------
+    → γ ⊢ M ↓ (v ⊔ w)
+
+  sub : ∀ {Γ} {γ : Env Γ} {M v w}
+    → γ ⊢ M ↓ v
+    → w ⊑ v
+      ---------
+    → γ ⊢ M ↓ w
+\end{code}
+\end{fence}
+
+Consider the rule for lambda abstractions, \texttt{↦-intro}. It says
+that a lambda abstraction results in a single-entry table that maps the
+input \texttt{v} to the output \texttt{w}, provided that evaluating the
+body in an environment with \texttt{v} bound to its parameter produces
+the output \texttt{w}. As a simple example of this rule, we can see that
+the identity function maps \texttt{⊥} to \texttt{⊥} and also that it
+maps \texttt{⊥\ ↦\ ⊥} to \texttt{⊥\ ↦\ ⊥}.
+
+\begin{fence}
+\begin{code}
+id : ∅ ⊢ ★
+id = ƛ # 0
+\end{code}
+\end{fence}
+
+\begin{fence}
+\begin{code}
+denot-id1 : ∀ {γ} → γ ⊢ id ↓ ⊥ ↦ ⊥
+denot-id1 = ↦-intro var
+
+denot-id2 : ∀ {γ} → γ ⊢ id ↓ (⊥ ↦ ⊥) ↦ (⊥ ↦ ⊥)
+denot-id2 = ↦-intro var
+\end{code}
+\end{fence}
+
+Of course, we will need tables with many rows to capture the meaning of
+lambda abstractions. These can be constructed using the \texttt{⊔-intro}
+rule. If term M (typically a lambda abstraction) can produce both tables
+\texttt{v} and \texttt{w}, then it produces the combined table
+\texttt{v\ ⊔\ w}. One can take an operational view of the rules
+\texttt{↦-intro} and \texttt{⊔-intro} by imagining that when an
+interpreter first comes to a lambda abstraction, it pre-evaluates the
+function on a bunch of randomly chosen arguments, using many instances
+of the rule \texttt{↦-intro}, and then joins them into a big table using
+many instances of the rule \texttt{⊔-intro}. In the following we show
+that the identity function produces a table containing both of the
+previous results, \texttt{⊥\ ↦\ ⊥} and \texttt{(⊥\ ↦\ ⊥)\ ↦\ (⊥\ ↦\ ⊥)}.
+
+\begin{fence}
+\begin{code}
+denot-id3 : `∅ ⊢ id ↓ (⊥ ↦ ⊥) ⊔ (⊥ ↦ ⊥) ↦ (⊥ ↦ ⊥)
+denot-id3 = ⊔-intro denot-id1 denot-id2
+\end{code}
+\end{fence}
+
+We most often think of the judgment \texttt{γ\ ⊢\ M\ ↓\ v} as taking the
+environment \texttt{γ} and term \texttt{M} as input, producing the
+result \texttt{v}. However, it is worth emphasizing that the semantics
+is a \emph{relation}. The above results for the identity function show
+that the same environment and term can be mapped to different results.
+However, the results for a given \texttt{γ} and \texttt{M} are not
+\emph{too} different, they are all finite approximations of the same
+function. Perhaps a better way of thinking about the judgment
+\texttt{γ\ ⊢\ M\ ↓\ v} is that the \texttt{γ}, \texttt{M}, and
+\texttt{v} are all inputs and the semantics either confirms or denies
+whether \texttt{v} is an accurate partial description of the result of
+\texttt{M} in environment \texttt{γ}.
+
+Next we consider the meaning of function application as given by the
+\texttt{↦-elim} rule. In the premise of the rule we have that \texttt{L}
+maps \texttt{v} to \texttt{w}. So if \texttt{M} produces \texttt{v},
+then the application of \texttt{L} to \texttt{M} produces \texttt{w}.
+
+As an example of function application and the \texttt{↦-elim} rule, we
+apply the identity function to itself. Indeed, we have both that
+\texttt{∅\ ⊢\ id\ ↓\ (u\ ↦\ u)\ ↦\ (u\ ↦\ u)} and also
+\texttt{∅\ ⊢\ id\ ↓\ (u\ ↦\ u)}, so we can apply the rule
+\texttt{↦-elim}.
+
+\begin{fence}
+\begin{code}
+id-app-id : ∀ {u : Value} → `∅ ⊢ id · id ↓ (u ↦ u)
+id-app-id {u} = ↦-elim (↦-intro var) (↦-intro var)
+\end{code}
+\end{fence}
+
+Next we revisit the Church numeral two:
+\texttt{λ\ f.\ λ\ u.\ (f\ (f\ u))}. This function has two parameters: a
+function \texttt{f} and an arbitrary value \texttt{u}, and it applies
+\texttt{f} twice. So \texttt{f} must map \texttt{u} to some value, which
+we'll name \texttt{v}. Then for the second application, \texttt{f} must
+map \texttt{v} to some value. Let's name it \texttt{w}. So the
+function's table must include two entries, both \texttt{u\ ↦\ v} and
+\texttt{v\ ↦\ w}. For each application of the table, we extract the
+appropriate entry from it using the \texttt{sub} rule. In particular, we
+use the ⊑-conj-R1 and ⊑-conj-R2 to select \texttt{u\ ↦\ v} and
+\texttt{v\ ↦\ w}, respectively, from the table
+\texttt{u\ ↦\ v\ ⊔\ v\ ↦\ w}. So the meaning of twoᶜ is that it takes
+this table and parameter \texttt{u}, and it returns \texttt{w}. Indeed
+we derive this as follows.
+
+\begin{fence}
+\begin{code}
+denot-twoᶜ : ∀{u v w : Value} → `∅ ⊢ twoᶜ ↓ ((u ↦ v ⊔ v ↦ w) ↦ u ↦ w)
+denot-twoᶜ {u}{v}{w} =
+  ↦-intro (↦-intro (↦-elim (sub var lt1) (↦-elim (sub var lt2) var)))
+  where lt1 : v ↦ w ⊑ u ↦ v ⊔ v ↦ w
+        lt1 = ⊑-conj-R2 (⊑-fun ⊑-refl ⊑-refl)
+
+        lt2 : u ↦ v ⊑ u ↦ v ⊔ v ↦ w
+        lt2 = (⊑-conj-R1 (⊑-fun ⊑-refl ⊑-refl))
+\end{code}
+\end{fence}
+
+Next we have a classic example of self application:
+\texttt{Δ\ =\ λx.\ (x\ x)}. The input value for \texttt{x} needs to be a
+table, and it needs to have an entry that maps a smaller version of
+itself, call it \texttt{v}, to some value \texttt{w}. So the input value
+looks like \texttt{v\ ↦\ w\ ⊔\ v}. Of course, then the output of
+\texttt{Δ} is \texttt{w}. The derivation is given below. The first
+occurrences of \texttt{x} evaluates to \texttt{v\ ↦\ w}, the second
+occurrence of \texttt{x} evaluates to \texttt{v}, and then the result of
+the application is \texttt{w}.
+
+\begin{fence}
+\begin{code}
+Δ : ∅ ⊢ ★
+Δ = (ƛ (# 0) · (# 0))
+
+denot-Δ : ∀ {v w} → `∅ ⊢ Δ ↓ ((v ↦ w ⊔ v) ↦ w)
+denot-Δ = ↦-intro (↦-elim (sub var (⊑-conj-R1 ⊑-refl))
+                          (sub var (⊑-conj-R2 ⊑-refl)))
+\end{code}
+\end{fence}
+
+One might worry whether this semantics can deal with diverging programs.
+The \texttt{⊥} value and the \texttt{⊥-intro} rule provide a way to
+handle them. (The \texttt{⊥-intro} rule is also what enables β reduction
+on non-terminating arguments.) The classic \texttt{Ω} program is a
+particularly simple program that diverges. It applies \texttt{Δ} to
+itself. The semantics assigns to \texttt{Ω} the meaning \texttt{⊥}.
+There are several ways to derive this, we shall start with one that
+makes use of the \texttt{⊔-intro} rule. First, \texttt{denot-Δ} tells us
+that \texttt{Δ} evaluates to \texttt{((⊥\ ↦\ ⊥)\ ⊔\ ⊥)\ ↦\ ⊥} (choose
+\texttt{v₁\ =\ v₂\ =\ ⊥}). Next, \texttt{Δ} also evaluates to
+\texttt{⊥\ ↦\ ⊥} by use of \texttt{↦-intro} and \texttt{⊥-intro} and to
+\texttt{⊥} by \texttt{⊥-intro}. As we saw previously, whenever we can
+show that a program evaluates to two values, we can apply
+\texttt{⊔-intro} to join them together, so \texttt{Δ} evaluates to
+\texttt{(⊥\ ↦\ ⊥)\ ⊔\ ⊥}. This matches the input of the first occurrence
+of \texttt{Δ}, so we can conclude that the result of the application is
+\texttt{⊥}.
+
+\begin{fence}
+\begin{code}
+Ω : ∅ ⊢ ★
+Ω = Δ · Δ
+
+denot-Ω : `∅ ⊢ Ω ↓ ⊥
+denot-Ω = ↦-elim denot-Δ (⊔-intro (↦-intro ⊥-intro) ⊥-intro)
+\end{code}
+\end{fence}
+
+A shorter derivation of the same result is by just one use of the
+\texttt{⊥-intro} rule.
+
+\begin{fence}
+\begin{code}
+denot-Ω' : `∅ ⊢ Ω ↓ ⊥
+denot-Ω' = ⊥-intro
+\end{code}
+\end{fence}
+
+Just because one can derive \texttt{∅\ ⊢\ M\ ↓\ ⊥} for some closed term
+\texttt{M} doesn't mean that \texttt{M} necessarily diverges. There may
+be other derivations that conclude with \texttt{M} producing some more
+informative value. However, if the only thing that a term evaluates to
+is \texttt{⊥}, then it indeed diverges.
+
+An attentive reader may have noticed a disconnect earlier in the way we
+planned to solve the self-application problem and the actual
+\texttt{↦-elim} rule for application. We said at the beginning that we
+would relax the notion of table lookup, allowing an argument to match an
+input entry if the argument is equal or greater than the input entry.
+Instead, the \texttt{↦-elim} rule seems to require an exact match.
+However, because of the \texttt{sub} rule, application really does allow
+larger arguments.
+
+\begin{fence}
+\begin{code}
+↦-elim2 : ∀ {Γ} {γ : Env Γ} {M₁ M₂ v₁ v₂ v₃}
+  → γ ⊢ M₁ ↓ (v₁ ↦ v₃)
+  → γ ⊢ M₂ ↓ v₂
+  → v₁ ⊑ v₂
+    ------------------
+  → γ ⊢ (M₁ · M₂) ↓ v₃
+↦-elim2 d₁ d₂ lt = ↦-elim d₁ (sub d₂ lt)
+\end{code}
+\end{fence}
+
+\hypertarget{exercise-denot-plusux1d9c-practice}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{denot-plusᶜ}
+(practice)}{Exercise denot-plusᶜ (practice)}}\label{exercise-denot-plusux1d9c-practice}}
+
+What is a denotation for \texttt{plusᶜ}? That is, find a value
+\texttt{v} (other than \texttt{⊥}) such that \texttt{∅\ ⊢\ plusᶜ\ ↓\ v}.
+Also, give the proof of \texttt{∅\ ⊢\ plusᶜ\ ↓\ v} for your choice of
+\texttt{v}.
+
+\begin{fence}
+\begin{code}
+-- Your code goes here
+\end{code}
+\end{fence}
+
+\hypertarget{denotations-and-denotational-equality}{%
+\section{Denotations and denotational
+equality}\label{denotations-and-denotational-equality}}
+
+Next we define a notion of denotational equality based on the above
+semantics. Its statement makes use of an if-and-only-if, which we define
+as follows.
+
+\begin{fence}
+\begin{code}
+_iff_ : Set → Set → Set
+P iff Q = (P → Q) × (Q → P)
+\end{code}
+\end{fence}
+
+Another way to view the denotational semantics is as a function that
+maps a term to a relation from environments to values. That is, the
+\emph{denotation} of a term is a relation from environments to values.
+
+\begin{fence}
+\begin{code}
+Denotation : Context → Set₁
+Denotation Γ = (Env Γ → Value → Set)
+\end{code}
+\end{fence}
+
+The following function ℰ gives this alternative view of the semantics,
+which really just amounts to changing the order of the parameters.
+
+\begin{fence}
+\begin{code}
+ℰ : ∀{Γ} → (M : Γ ⊢ ★) → Denotation Γ
+ℰ M = λ γ v → γ ⊢ M ↓ v
+\end{code}
+\end{fence}
+
+In general, two denotations are equal when they produce the same values
+in the same environment.
+
+\begin{fence}
+\begin{code}
+infix 3 _≃_
+
+_≃_ : ∀ {Γ} → (Denotation Γ) → (Denotation Γ) → Set
+(_≃_ {Γ} D₁ D₂) = (γ : Env Γ) → (v : Value) → D₁ γ v iff D₂ γ v
+\end{code}
+\end{fence}
+
+Denotational equality is an equivalence relation.
+
+\begin{fence}
+\begin{code}
+≃-refl : ∀ {Γ : Context} → {M : Denotation Γ}
+  → M ≃ M
+≃-refl γ v = ⟨ (λ x → x) , (λ x → x) ⟩
+
+≃-sym : ∀ {Γ : Context} → {M N : Denotation Γ}
+  → M ≃ N
+    -----
+  → N ≃ M
+≃-sym eq γ v = ⟨ (proj₂ (eq γ v)) , (proj₁ (eq γ v)) ⟩
+
+≃-trans : ∀ {Γ : Context} → {M₁ M₂ M₃ : Denotation Γ}
+  → M₁ ≃ M₂
+  → M₂ ≃ M₃
+    -------
+  → M₁ ≃ M₃
+≃-trans eq1 eq2 γ v = ⟨ (λ z → proj₁ (eq2 γ v) (proj₁ (eq1 γ v) z)) ,
+                        (λ z → proj₂ (eq1 γ v) (proj₂ (eq2 γ v) z)) ⟩
+\end{code}
+\end{fence}
+
+Two terms \texttt{M} and \texttt{N} are denotational equal when their
+denotations are equal, that is, \texttt{ℰ\ M\ ≃\ ℰ\ N}.
+
+The following submodule introduces equational reasoning for the
+\texttt{≃} relation.
+
+\begin{fence}
+\begin{code}
+
+module ≃-Reasoning {Γ : Context} where
+
+  infix  1 start_
+  infixr 2 _≃⟨⟩_ _≃⟨_⟩_
+  infix  3 _☐
+
+  start_ : ∀ {x y : Denotation Γ}
+    → x ≃ y
+      -----
+    → x ≃ y
+  start x≃y  =  x≃y
+
+  _≃⟨_⟩_ : ∀ (x : Denotation Γ) {y z : Denotation Γ}
+    → x ≃ y
+    → y ≃ z
+      -----
+    → x ≃ z
+  (x ≃⟨ x≃y ⟩ y≃z) =  ≃-trans x≃y y≃z
+
+  _≃⟨⟩_ : ∀ (x : Denotation Γ) {y : Denotation Γ}
+    → x ≃ y
+      -----
+    → x ≃ y
+  x ≃⟨⟩ x≃y  =  x≃y
+
+  _☐ : ∀ (x : Denotation Γ)
+      -----
+    → x ≃ x
+  (x ☐)  =  ≃-refl
+\end{code}
+\end{fence}
+
+\hypertarget{road-map-for-the-following-chapters}{%
+\section{Road map for the following
+chapters}\label{road-map-for-the-following-chapters}}
+
+The subsequent chapters prove that the denotational semantics has
+several desirable properties. First, we prove that the semantics is
+compositional, i.e., that the denotation of a term is a function of the
+denotations of its subterms. To do this we shall prove equations of the
+following shape.
+
+\begin{myDisplay}
+ℰ (` x) ≃ ...
+ℰ (ƛ M) ≃ ... ℰ M ...
+ℰ (M · N) ≃ ... ℰ M ... ℰ N ...
+\end{myDisplay}
+
+The compositionality property is not trivial because the semantics we
+have defined includes three rules that are not syntax directed:
+\texttt{⊥-intro}, \texttt{⊔-intro}, and \texttt{sub}. The above
+equations suggest that the denotational semantics can be defined as a
+recursive function, and indeed, we give such a definition and prove that
+it is equivalent to ℰ.
+
+Next we investigate whether the denotational semantics and the reduction
+semantics are equivalent. Recall that the job of a language semantics is
+to describe the observable behavior of a given program \texttt{M}. For
+the lambda calculus there are several choices that one can make, but
+they usually boil down to a single bit of information:
+
+\begin{itemize}
+\tightlist
+\item
+  divergence: the program \texttt{M} executes forever.
+\item
+  termination: the program \texttt{M} halts.
+\end{itemize}
+
+We can characterize divergence and termination in terms of reduction.
+
+\begin{itemize}
+\tightlist
+\item
+  divergence: \texttt{¬\ (M\ —↠\ ƛ\ N)} for any term \texttt{N}.
+\item
+  termination: \texttt{M\ —↠\ ƛ\ N} for some term \texttt{N}.
+\end{itemize}
+
+We can also characterize divergence and termination using denotations.
+
+\begin{itemize}
+\tightlist
+\item
+  divergence: \texttt{¬\ (∅\ ⊢\ M\ ↓\ v\ ↦\ w)} for any \texttt{v} and
+  \texttt{w}.
+\item
+  termination: \texttt{∅\ ⊢\ M\ ↓\ v\ ↦\ w} for some \texttt{v} and
+  \texttt{w}.
+\end{itemize}
+
+Alternatively, we can use the denotation function \texttt{ℰ}.
+
+\begin{itemize}
+\tightlist
+\item
+  divergence: \texttt{¬\ (ℰ\ M\ ≃\ ℰ\ (ƛ\ N))} for any term \texttt{N}.
+\item
+  termination: \texttt{ℰ\ M\ ≃\ ℰ\ (ƛ\ N)} for some term \texttt{N}.
+\end{itemize}
+
+So the question is whether the reduction semantics and denotational
+semantics are equivalent.
+
+\begin{myDisplay}
+(∃ N. M —↠ ƛ N)  iff  (∃ N. ℰ M ≃ ℰ (ƛ N))
+\end{myDisplay}
+
+We address each direction of the equivalence in the second and third
+chapters. In the second chapter we prove that reduction to a lambda
+abstraction implies denotational equality to a lambda abstraction. This
+property is called the \emph{soundness} in the literature.
+
+\begin{myDisplay}
+M —↠ ƛ N  implies  ℰ M ≃ ℰ (ƛ N)
+\end{myDisplay}
+
+In the third chapter we prove that denotational equality to a lambda
+abstraction implies reduction to a lambda abstraction. This property is
+called \emph{adequacy} in the literature.
+
+\begin{myDisplay}
+ℰ M ≃ ℰ (ƛ N)  implies M —↠ ƛ N′ for some N′
+\end{myDisplay}
+
+The fourth chapter applies the results of the three preceding chapters
+(compositionality, soundness, and adequacy) to prove that denotational
+equality implies a property called \emph{contextual equivalence}. This
+property is important because it justifies the use of denotational
+equality in proving the correctness of program transformations such as
+performance optimizations.
+
+The proofs of all of these properties rely on some basic results about
+the denotational semantics, which we establish in the rest of this
+chapter. We start with some lemmas about renaming, which are quite
+similar to the renaming lemmas that we have seen in previous chapters.
+We conclude with a proof of an important inversion lemma for the
+less-than relation regarding function values.
+
+\hypertarget{renaming-preserves-denotations}{%
+\section{Renaming preserves
+denotations}\label{renaming-preserves-denotations}}
+
+We shall prove that renaming variables, and changing the environment
+accordingly, preserves the meaning of a term. We generalize the renaming
+lemma to allow the values in the new environment to be the same or
+larger than the original values. This generalization is useful in
+proving that reduction implies denotational equality.
+
+As before, we need an extension lemma to handle the case where we
+proceed underneath a lambda abstraction. Suppose that \texttt{ρ} is a
+renaming that maps variables in \texttt{γ} into variables with equal or
+larger values in \texttt{δ}. This lemmas says that extending the
+renaming producing a renaming \texttt{ext\ r} that maps \texttt{γ\ ,\ v}
+to \texttt{δ\ ,\ v}.
+
+\begin{fence}
+\begin{code}
+ext-⊑ : ∀ {Γ Δ v} {γ : Env Γ} {δ : Env Δ}
+  → (ρ : Rename Γ Δ)
+  → γ `⊑ (δ ∘ ρ)
+    ------------------------------
+  → (γ `, v) `⊑ ((δ `, v) ∘ ext ρ)
+ext-⊑ ρ lt Z = ⊑-refl
+ext-⊑ ρ lt (S n′) = lt n′
+\end{code}
+\end{fence}
+
+We proceed by cases on the de Bruijn index \texttt{n}.
+
+\begin{itemize}
+\item
+  If it is \texttt{Z}, then we just need to show that \texttt{v\ ≡\ v},
+  which we have by \texttt{refl}.
+\item
+  If it is \texttt{S\ n′}, then the goal simplifies to
+  \texttt{γ\ n′\ ≡\ δ\ (ρ\ n′)}, which is an instance of the premise.
+\end{itemize}
+
+Now for the renaming lemma. Suppose we have a renaming that maps
+variables in \texttt{γ} into variables with the same values in
+\texttt{δ}. If \texttt{M} results in \texttt{v} when evaluated in
+environment \texttt{γ}, then applying the renaming to \texttt{M}
+produces a program that results in the same value \texttt{v} when
+evaluated in \texttt{δ}.
+
+\begin{fence}
+\begin{code}
+rename-pres : ∀ {Γ Δ v} {γ : Env Γ} {δ : Env Δ} {M : Γ ⊢ ★}
+  → (ρ : Rename Γ Δ)
+  → γ `⊑ (δ ∘ ρ)
+  → γ ⊢ M ↓ v
+    ---------------------
+  → δ ⊢ (rename ρ M) ↓ v
+rename-pres ρ lt (var {x = x}) = sub var (lt x)
+rename-pres ρ lt (↦-elim d d₁) =
+   ↦-elim (rename-pres ρ lt d) (rename-pres ρ lt d₁)
+rename-pres ρ lt (↦-intro d) =
+   ↦-intro (rename-pres (ext ρ) (ext-⊑ ρ lt) d)
+rename-pres ρ lt ⊥-intro = ⊥-intro
+rename-pres ρ lt (⊔-intro d d₁) =
+   ⊔-intro (rename-pres ρ lt d) (rename-pres ρ lt d₁)
+rename-pres ρ lt (sub d lt′) =
+   sub (rename-pres ρ lt d) lt′
+\end{code}
+\end{fence}
+
+The proof is by induction on the semantics of \texttt{M}. As you can
+see, all of the cases are trivial except the cases for variables and
+lambda.
+
+\begin{itemize}
+\item
+  For a variable \texttt{x}, we make use of the premise to show that
+  \texttt{γ\ x\ ≡\ δ\ (ρ\ x)}.
+\item
+  For a lambda abstraction, the induction hypothesis requires us to
+  extend the renaming. We do so, and use the \texttt{ext-⊑} lemma to
+  show that the extended renaming maps variables to ones with equivalent
+  values.
+\end{itemize}
+
+\hypertarget{environment-strengthening-and-identity-renaming}{%
+\section{Environment strengthening and identity
+renaming}\label{environment-strengthening-and-identity-renaming}}
+
+We shall need a corollary of the renaming lemma that says that replacing
+the environment with a larger one (a stronger one) does not change
+whether a term \texttt{M} results in particular value \texttt{v}. In
+particular, if \texttt{γ\ ⊢\ M\ ↓\ v} and \texttt{γ\ ⊑\ δ}, then
+\texttt{δ\ ⊢\ M\ ↓\ v}. What does this have to do with renaming? It's
+renaming with the identity function. We apply the renaming lemma with
+the identity renaming, which gives us
+\texttt{δ\ ⊢\ rename\ (λ\ \{A\}\ x\ →\ x)\ M\ ↓\ v}, and then we apply
+the \texttt{rename-id} lemma to obtain \texttt{δ\ ⊢\ M\ ↓\ v}.
+
+\begin{fence}
+\begin{code}
+⊑-env : ∀ {Γ} {γ : Env Γ} {δ : Env Γ} {M v}
+  → γ ⊢ M ↓ v
+  → γ `⊑ δ
+    ----------
+  → δ ⊢ M ↓ v
+⊑-env{Γ}{γ}{δ}{M}{v} d lt
+      with rename-pres{Γ}{Γ}{v}{γ}{δ}{M} (λ {A} x → x) lt d
+... | δ⊢id[M]↓v rewrite rename-id {Γ}{★}{M} =
+      δ⊢id[M]↓v
+\end{code}
+\end{fence}
+
+In the proof that substitution reflects denotations, in the case for
+lambda abstraction, we use a minor variation of \texttt{⊑-env}, in which
+just the last element of the environment gets larger.
+
+\begin{fence}
+\begin{code}
+up-env : ∀ {Γ} {γ : Env Γ} {M v u₁ u₂}
+  → (γ `, u₁) ⊢ M ↓ v
+  → u₁ ⊑ u₂
+    -----------------
+  → (γ `, u₂) ⊢ M ↓ v
+up-env d lt = ⊑-env d (ext-le lt)
+  where
+  ext-le : ∀ {γ u₁ u₂} → u₁ ⊑ u₂ → (γ `, u₁) `⊑ (γ `, u₂)
+  ext-le lt Z = lt
+  ext-le lt (S n) = ⊑-refl
+\end{code}
+\end{fence}
+
+\hypertarget{exercise-denot-church-recommended}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{denot-church}
+(recommended)}{Exercise denot-church (recommended)}}\label{exercise-denot-church-recommended}}
+
+Church numerals are more general than natural numbers in that they
+represent paths. A path consists of \texttt{n} edges and
+\texttt{n\ +\ 1} vertices. We store the vertices in a vector of length
+\texttt{n\ +\ 1} in reverse order. The edges in the path map the ith
+vertex to the \texttt{i\ +\ 1} vertex. The following function
+\texttt{D\^{}suc} (for denotation of successor) constructs a table whose
+entries are all the edges in the path.
+
+\begin{fence}
+\begin{code}
+D^suc : (n : ℕ) → Vec Value (suc n) → Value
+D^suc zero (a[0] ∷ []) = ⊥
+D^suc (suc i) (a[i+1] ∷ a[i] ∷ ls) =  a[i] ↦ a[i+1]  ⊔  D^suc i (a[i] ∷ ls)
+\end{code}
+\end{fence}
+
+We use the following auxiliary function to obtain the last element of a
+non-empty vector. (This formulation is more convenient for our purposes
+than the one in the Agda standard library.)
+
+\begin{fence}
+\begin{code}
+vec-last : ∀{n : ℕ} → Vec Value (suc n) → Value
+vec-last {0} (a ∷ []) = a
+vec-last {suc n} (a ∷ b ∷ ls) = vec-last (b ∷ ls)
+\end{code}
+\end{fence}
+
+The function \texttt{Dᶜ} computes the denotation of the nth Church
+numeral for a given path.
+
+\begin{fence}
+\begin{code}
+Dᶜ : (n : ℕ) → Vec Value (suc n) → Value
+Dᶜ n (a[n] ∷ ls) = (D^suc n (a[n] ∷ ls)) ↦ (vec-last (a[n] ∷ ls)) ↦ a[n]
+\end{code}
+\end{fence}
+
+\begin{itemize}
+\item
+  The Church numeral for 0 ignores its first argument and returns its
+  second argument, so for the singleton path consisting of just
+  \texttt{a{[}0{]}}, its denotation is
+
+  \begin{myDisplay}
+    ⊥ ↦ a[0] ↦ a[0]
+  \end{myDisplay}
+\item
+  The Church numeral for \texttt{suc\ n} takes two arguments: a
+  successor function whose denotation is given by \texttt{D\^{}suc}, and
+  the start of the path (last of the vector). It returns the
+  \texttt{n\ +\ 1} vertex in the path.
+
+  \begin{myDisplay}
+    (D^suc (suc n) (a[n+1] ∷ a[n] ∷ ls)) ↦ (vec-last (a[n] ∷ ls)) ↦ a[n+1]
+  \end{myDisplay}
+\end{itemize}
+
+The exercise is to prove that for any path \texttt{ls}, the meaning of
+the Church numeral \texttt{n} is \texttt{Dᶜ\ n\ ls}.
+
+To facilitate talking about arbitrary Church numerals, the following
+\texttt{church} function builds the term for the nth Church numeral,
+using the auxiliary function \texttt{apply-n}.
+
+\begin{fence}
+\begin{code}
+apply-n : (n : ℕ) → ∅ , ★ , ★ ⊢ ★
+apply-n zero = # 0
+apply-n (suc n) = # 1 · apply-n n
+
+church : (n : ℕ) → ∅ ⊢ ★
+church n = ƛ ƛ apply-n n
+\end{code}
+\end{fence}
+
+Prove the following theorem.
+
+\begin{myDisplay}
+denot-church : ∀{n : ℕ}{ls : Vec Value (suc n)}
+   → `∅ ⊢ church n ↓ Dᶜ n ls
+\end{myDisplay}
+
+\begin{fence}
+\begin{code}
+-- Your code goes here
+\end{code}
+\end{fence}
+
+\hypertarget{inversion-of-the-less-than-relation-for-functions}{%
+\section{Inversion of the less-than relation for
+functions}\label{inversion-of-the-less-than-relation-for-functions}}
+
+What can we deduce from knowing that a function \texttt{v\ ↦\ w} is less
+than some value \texttt{u}? What can we deduce about \texttt{u}? The
+answer to this question is called the inversion property of less-than
+for functions. This question is not easy to answer because of the
+\texttt{⊑-dist} rule, which relates a function on the left to a pair of
+functions on the right. So \texttt{u} may include several functions
+that, as a group, relate to \texttt{v\ ↦\ w}. Furthermore, because of
+the rules \texttt{⊑-conj-R1} and \texttt{⊑-conj-R2}, there may be other
+values inside \texttt{u}, such as \texttt{⊥}, that have nothing to do
+with \texttt{v\ ↦\ w}. But in general, we can deduce that \texttt{u}
+includes a collection of functions where the join of their domains is
+less than \texttt{v} and the join of their codomains is greater than
+\texttt{w}.
+
+To precisely state and prove this inversion property, we need to define
+what it means for a value to \emph{include} a collection of values. We
+also need to define how to compute the join of their domains and
+codomains.
+
+\hypertarget{value-membership-and-inclusion}{%
+\subsection{Value membership and
+inclusion}\label{value-membership-and-inclusion}}
+
+Recall that we think of a value as a set of entries with the join
+operator \texttt{v\ ⊔\ w} acting like set union. The function value
+\texttt{v\ ↦\ w} and bottom value \texttt{⊥} constitute the two kinds of
+elements of the set. (In other contexts one can instead think of
+\texttt{⊥} as the empty set, but here we must think of it as an
+element.) We write \texttt{u\ ∈\ v} to say that \texttt{u} is an element
+of \texttt{v}, as defined below.
+
+\begin{fence}
+\begin{code}
+infix 5 _∈_
+
+_∈_ : Value → Value → Set
+u ∈ ⊥ = u ≡ ⊥
+u ∈ v ↦ w = u ≡ v ↦ w
+u ∈ (v ⊔ w) = u ∈ v ⊎ u ∈ w
+\end{code}
+\end{fence}
+
+So we can represent a collection of values simply as a value. We write
+\texttt{v\ ⊆\ w} to say that all the elements of \texttt{v} are also in
+\texttt{w}.
+
+\begin{fence}
+\begin{code}
+infix 5 _⊆_
+
+_⊆_ : Value → Value → Set
+v ⊆ w = ∀{u} → u ∈ v → u ∈ w
+\end{code}
+\end{fence}
+
+The notions of membership and inclusion for values are closely related
+to the less-than relation. They are narrower relations in that they
+imply the less-than relation but not the other way around.
+
+\begin{fence}
+\begin{code}
+∈→⊑ : ∀{u v : Value}
+    → u ∈ v
+      -----
+    → u ⊑ v
+∈→⊑ {.⊥} {⊥} refl = ⊑-bot
+∈→⊑ {v ↦ w} {v ↦ w} refl = ⊑-refl
+∈→⊑ {u} {v ⊔ w} (inj₁ x) = ⊑-conj-R1 (∈→⊑ x)
+∈→⊑ {u} {v ⊔ w} (inj₂ y) = ⊑-conj-R2 (∈→⊑ y)
+
+⊆→⊑ : ∀{u v : Value}
+    → u ⊆ v
+      -----
+    → u ⊑ v
+⊆→⊑ {⊥} s with s {⊥} refl
+... | x = ⊑-bot
+⊆→⊑ {u ↦ u′} s with s {u ↦ u′} refl
+... | x = ∈→⊑ x
+⊆→⊑ {u ⊔ u′} s = ⊑-conj-L (⊆→⊑ (λ z → s (inj₁ z))) (⊆→⊑ (λ z → s (inj₂ z)))
+\end{code}
+\end{fence}
+
+We shall also need some inversion principles for value inclusion. If the
+union of \texttt{u} and \texttt{v} is included in \texttt{w}, then of
+course both \texttt{u} and \texttt{v} are each included in \texttt{w}.
+
+\begin{fence}
+\begin{code}
+⊔⊆-inv : ∀{u v w : Value}
+       → (u ⊔ v) ⊆ w
+         ---------------
+       → u ⊆ w  ×  v ⊆ w
+⊔⊆-inv uvw = ⟨ (λ x → uvw (inj₁ x)) , (λ x → uvw (inj₂ x)) ⟩
+\end{code}
+\end{fence}
+
+In our value representation, the function value \texttt{v\ ↦\ w} is both
+an element and also a singleton set. So if \texttt{v\ ↦\ w} is a subset
+of \texttt{u}, then \texttt{v\ ↦\ w} must be a member of \texttt{u}.
+
+\begin{fence}
+\begin{code}
+↦⊆→∈ : ∀{v w u : Value}
+     → v ↦ w ⊆ u
+       ---------
+     → v ↦ w ∈ u
+↦⊆→∈ incl = incl refl
+\end{code}
+\end{fence}
+
+\hypertarget{function-values}{%
+\subsection{Function values}\label{function-values}}
+
+To identify collections of functions, we define the following two
+predicates. We write \texttt{Fun\ u} if \texttt{u} is a function value,
+that is, if \texttt{u\ ≡\ v\ ↦\ w} for some values \texttt{v} and
+\texttt{w}. We write \texttt{all-funs\ v} if all the elements of
+\texttt{v} are functions.
+
+\begin{fence}
+\begin{code}
+data Fun : Value → Set where
+  fun : ∀{u v w} → u ≡ (v ↦ w) → Fun u
+
+all-funs : Value → Set
+all-funs v = ∀{u} → u ∈ v → Fun u
+\end{code}
+\end{fence}
+
+The value \texttt{⊥} is not a function.
+
+\begin{fence}
+\begin{code}
+¬Fun⊥ : ¬ (Fun ⊥)
+¬Fun⊥ (fun ())
+\end{code}
+\end{fence}
+
+In our values-as-sets representation, our sets always include at least
+one element. Thus, if all the elements are functions, there is at least
+one that is a function.
+
+\begin{fence}
+\begin{code}
+all-funs∈ : ∀{u}
+      → all-funs u
+      → Σ[ v ∈ Value ] Σ[ w ∈ Value ] v ↦ w ∈ u
+all-funs∈ {⊥} f with f {⊥} refl
+... | fun ()
+all-funs∈ {v ↦ w} f = ⟨ v , ⟨ w , refl ⟩ ⟩
+all-funs∈ {u ⊔ u′} f
+    with all-funs∈ λ z → f (inj₁ z)
+... | ⟨ v , ⟨ w , m ⟩ ⟩ = ⟨ v , ⟨ w , (inj₁ m) ⟩ ⟩
+\end{code}
+\end{fence}
+
+\hypertarget{domains-and-codomains}{%
+\subsection{Domains and codomains}\label{domains-and-codomains}}
+
+Returning to our goal, the inversion principle for less-than a function,
+we want to show that \texttt{v\ ↦\ w\ ⊑\ u} implies that \texttt{u}
+includes a set of function values such that the join of their domains is
+less than \texttt{v} and the join of their codomains is greater than
+\texttt{w}.
+
+To this end we define the following \texttt{⨆dom} and \texttt{⨆cod}
+functions. Given some value \texttt{u} (that represents a set of
+entries), \texttt{⨆dom\ u} returns the join of their domains and
+\texttt{⨆cod\ u} returns the join of their codomains.
+
+\begin{fence}
+\begin{code}
+⨆dom : (u : Value) → Value
+⨆dom ⊥  = ⊥
+⨆dom (v ↦ w) = v
+⨆dom (u ⊔ u′) = ⨆dom u ⊔ ⨆dom u′
+
+⨆cod : (u : Value) → Value
+⨆cod ⊥  = ⊥
+⨆cod (v ↦ w) = w
+⨆cod (u ⊔ u′) = ⨆cod u ⊔ ⨆cod u′
+\end{code}
+\end{fence}
+
+We need just one property each for \texttt{⨆dom} and \texttt{⨆cod}.
+Given a collection of functions represented by value \texttt{u}, and an
+entry \texttt{v\ ↦\ w\ ∈\ u}, we know that \texttt{v} is included in the
+domain of \texttt{v}.
+
+\begin{fence}
+\begin{code}
+↦∈→⊆⨆dom : ∀{u v w : Value}
+          → all-funs u  →  (v ↦ w) ∈ u
+            ----------------------
+          → v ⊆ ⨆dom u
+↦∈→⊆⨆dom {⊥} fg () u∈v
+↦∈→⊆⨆dom {v ↦ w} fg refl u∈v = u∈v
+↦∈→⊆⨆dom {u ⊔ u′} fg (inj₁ v↦w∈u) u∈v =
+   let ih = ↦∈→⊆⨆dom (λ z → fg (inj₁ z)) v↦w∈u in
+   inj₁ (ih u∈v)
+↦∈→⊆⨆dom {u ⊔ u′} fg (inj₂ v↦w∈u′) u∈v =
+   let ih = ↦∈→⊆⨆dom (λ z → fg (inj₂ z)) v↦w∈u′ in
+   inj₂ (ih u∈v)
+\end{code}
+\end{fence}
+
+Regarding \texttt{⨆cod}, suppose we have a collection of functions
+represented by \texttt{u}, but all of them are just copies of
+\texttt{v\ ↦\ w}. Then the \texttt{⨆cod\ u} is included in \texttt{w}.
+
+\begin{fence}
+\begin{code}
+⊆↦→⨆cod⊆ : ∀{u v w : Value}
+        → u ⊆ v ↦ w
+          ---------
+        → ⨆cod u ⊆ w
+⊆↦→⨆cod⊆ {⊥} s refl with s {⊥} refl
+... | ()
+⊆↦→⨆cod⊆ {C ↦ C′} s m with s {C ↦ C′} refl
+... | refl = m
+⊆↦→⨆cod⊆ {u ⊔ u′} s (inj₁ x) = ⊆↦→⨆cod⊆ (λ {C} z → s (inj₁ z)) x
+⊆↦→⨆cod⊆ {u ⊔ u′} s (inj₂ y) = ⊆↦→⨆cod⊆ (λ {C} z → s (inj₂ z)) y
+\end{code}
+\end{fence}
+
+With the \texttt{⨆dom} and \texttt{⨆cod} functions in hand, we can make
+precise the conclusion of the inversion principle for functions, which
+we package into the following predicate named \texttt{factor}. We say
+that \texttt{v\ ↦\ w} \emph{factors} \texttt{u} into \texttt{u′} if
+\texttt{u′} is a included in \texttt{u}, if \texttt{u′} contains only
+functions, its domain is less than \texttt{v}, and its codomain is
+greater than \texttt{w}.
+
+\begin{fence}
+\begin{code}
+factor : (u : Value) → (u′ : Value) → (v : Value) → (w : Value) → Set
+factor u u′ v w = all-funs u′  ×  u′ ⊆ u  ×  ⨆dom u′ ⊑ v  ×  w ⊑ ⨆cod u′
+\end{code}
+\end{fence}
+
+So the inversion principle for functions can be stated as
+
+\begin{myDisplay}
+  v ↦ w ⊑ u
+  ---------------
+→ factor u u′ v w
+\end{myDisplay}
+
+We prove the inversion principle for functions by induction on the
+derivation of the less-than relation. To make the induction hypothesis
+stronger, we broaden the premise \texttt{v\ ↦\ w\ ⊑\ u} to
+\texttt{u₁\ ⊑\ u₂}, and strengthen the conclusion to say that for
+\emph{every} function value \texttt{v\ ↦\ w\ ∈\ u₁}, we have that
+\texttt{v\ ↦\ w} factors \texttt{u₂} into some value \texttt{u₃}.
+
+\begin{myDisplay}
+→ u₁ ⊑ u₂
+  ------------------------------------------------------
+→ ∀{v w} → v ↦ w ∈ u₁ → Σ[ u₃ ∈ Value ] factor u₂ u₃ v w
+\end{myDisplay}
+
+\hypertarget{inversion-of-less-than-for-functions-the-case-for--trans}{%
+\subsection{Inversion of less-than for functions, the case for
+⊑-trans}\label{inversion-of-less-than-for-functions-the-case-for--trans}}
+
+The crux of the proof is the case for \texttt{⊑-trans}.
+
+\begin{myDisplay}
+u₁ ⊑ u   u ⊑ u₂
+--------------- (⊑-trans)
+    u₁ ⊑ u₂
+\end{myDisplay}
+
+By the induction hypothesis for \texttt{u₁\ ⊑\ u}, we know that
+\texttt{v\ ↦\ w\ factors\ u\ into\ u′}, for some value \texttt{u′}, so
+we have \texttt{all-funs\ u′} and \texttt{u′\ ⊆\ u}. By the induction
+hypothesis for \texttt{u\ ⊑\ u₂}, we know that for any
+\texttt{v′\ ↦\ w′\ ∈\ u}, \texttt{v′\ ↦\ w′} factors \texttt{u₂} into
+\texttt{u₃}. With these facts in hand, we proceed by induction on
+\texttt{u′} to prove that \texttt{(⨆dom\ u′)\ ↦\ (⨆cod\ u′)} factors
+\texttt{u₂} into \texttt{u₃}. We discuss each case of the proof in the
+text below.
+
+\begin{fence}
+\begin{code}
+sub-inv-trans : ∀{u′ u₂ u : Value}
+    → all-funs u′  →  u′ ⊆ u
+    → (∀{v′ w′} → v′ ↦ w′ ∈ u → Σ[ u₃ ∈ Value ] factor u₂ u₃ v′ w′)
+      ---------------------------------------------------------------
+    → Σ[ u₃ ∈ Value ] factor u₂ u₃ (⨆dom u′) (⨆cod u′)
+sub-inv-trans {⊥} {u₂} {u} fu′ u′⊆u IH =
+   ⊥-elim (contradiction (fu′ refl) ¬Fun⊥)
+sub-inv-trans {u₁′ ↦ u₂′} {u₂} {u} fg u′⊆u IH = IH (↦⊆→∈ u′⊆u)
+sub-inv-trans {u₁′ ⊔ u₂′} {u₂} {u} fg u′⊆u IH
+    with ⊔⊆-inv u′⊆u
+... | ⟨ u₁′⊆u , u₂′⊆u ⟩
+    with sub-inv-trans {u₁′} {u₂} {u} (λ {v′} z → fg (inj₁ z)) u₁′⊆u IH
+       | sub-inv-trans {u₂′} {u₂} {u} (λ {v′} z → fg (inj₂ z)) u₂′⊆u IH
+... | ⟨ u₃₁ , ⟨ fu21' , ⟨ u₃₁⊆u₂ , ⟨ du₃₁⊑du₁′ , cu₁′⊑cu₃₁ ⟩ ⟩ ⟩ ⟩
+    | ⟨ u₃₂ , ⟨ fu22' , ⟨ u₃₂⊆u₂ , ⟨ du₃₂⊑du₂′ , cu₁′⊑cu₃₂ ⟩ ⟩ ⟩ ⟩ =
+      ⟨ (u₃₁ ⊔ u₃₂) , ⟨ fu₂′ , ⟨ u₂′⊆u₂ ,
+      ⟨ ⊔⊑⊔ du₃₁⊑du₁′ du₃₂⊑du₂′ ,
+        ⊔⊑⊔ cu₁′⊑cu₃₁ cu₁′⊑cu₃₂ ⟩ ⟩ ⟩ ⟩
+    where fu₂′ : {v′ : Value} → v′ ∈ u₃₁ ⊎ v′ ∈ u₃₂ → Fun v′
+          fu₂′ {v′} (inj₁ x) = fu21' x
+          fu₂′ {v′} (inj₂ y) = fu22' y
+          u₂′⊆u₂ : {C : Value} → C ∈ u₃₁ ⊎ C ∈ u₃₂ → C ∈ u₂
+          u₂′⊆u₂ {C} (inj₁ x) = u₃₁⊆u₂ x
+          u₂′⊆u₂ {C} (inj₂ y) = u₃₂⊆u₂ y
+\end{code}
+\end{fence}
+
+\begin{itemize}
+\item
+  Suppose \texttt{u′\ ≡\ ⊥}. Then we have a contradiction because it is
+  not the case that \texttt{Fun\ ⊥}.
+\item
+  Suppose \texttt{u′\ ≡\ u₁′\ ↦\ u₂′}. Then \texttt{u₁′\ ↦\ u₂′\ ∈\ u}
+  and we can apply the premise (the induction hypothesis from
+  \texttt{u\ ⊑\ u₂}) to obtain that \texttt{u₁′\ ↦\ u₂′} factors of
+  \texttt{u₂\ into\ u₂′}. This case is complete because
+  \texttt{⨆dom\ u′\ ≡\ u₁′} and \texttt{⨆cod\ u′\ ≡\ u₂′}.
+\item
+  Suppose \texttt{u′\ ≡\ u₁′\ ⊔\ u₂′}. Then we have \texttt{u₁′\ ⊆\ u}
+  and \texttt{u₂′\ ⊆\ u}. We also have \texttt{all-funs\ u₁′} and
+  \texttt{all-funs\ u₂′}, so we can apply the induction hypothesis for
+  both \texttt{u₁′} and \texttt{u₂′}. So there exists values
+  \texttt{u₃₁} and \texttt{u₃₂} such that
+  \texttt{(⨆dom\ u₁′)\ ↦\ (⨆cod\ u₁′)} factors \texttt{u} into
+  \texttt{u₃₁} and \texttt{(⨆dom\ u₂′)\ ↦\ (⨆cod\ u₂′)} factors
+  \texttt{u} into \texttt{u₃₂}. We will show that
+  \texttt{(⨆dom\ u)\ ↦\ (⨆cod\ u)} factors \texttt{u} into
+  \texttt{u₃₁\ ⊔\ u₃₂}. So we need to show that
+
+  \begin{myDisplay}
+    ⨆dom (u₃₁ ⊔ u₃₂) ⊑ ⨆dom (u₁′ ⊔ u₂′)
+    ⨆cod (u₁′ ⊔ u₂′) ⊑ ⨆cod (u₃₁ ⊔ u₃₂)
+  \end{myDisplay}
+
+  But those both follow directly from the factoring of \texttt{u} into
+  \texttt{u₃₁} and \texttt{u₃₂}, using the monotonicity of \texttt{⊔}
+  with respect to \texttt{⊑}.
+\end{itemize}
+
+\hypertarget{inversion-of-less-than-for-functions}{%
+\subsection{Inversion of less-than for
+functions}\label{inversion-of-less-than-for-functions}}
+
+We come to the proof of the main lemma concerning the inversion of
+less-than for functions. We show that if \texttt{u₁\ ⊑\ u₂}, then for
+any \texttt{v\ ↦\ w\ ∈\ u₁}, we can factor \texttt{u₂} into \texttt{u₃}
+according to \texttt{v\ ↦\ w}. We proceed by induction on the derivation
+of \texttt{u₁\ ⊑\ u₂}, and describe each case in the text after the Agda
+proof.
+
+\begin{fence}
+\begin{code}
+sub-inv : ∀{u₁ u₂ : Value}
+        → u₁ ⊑ u₂
+        → ∀{v w} → v ↦ w ∈ u₁
+          -------------------------------------
+        → Σ[ u₃ ∈ Value ] factor u₂ u₃ v w
+sub-inv {⊥} {u₂} ⊑-bot {v} {w} ()
+sub-inv {u₁₁ ⊔ u₁₂} {u₂} (⊑-conj-L lt1 lt2) {v} {w} (inj₁ x) = sub-inv lt1 x
+sub-inv {u₁₁ ⊔ u₁₂} {u₂} (⊑-conj-L lt1 lt2) {v} {w} (inj₂ y) = sub-inv lt2 y
+sub-inv {u₁} {u₂₁ ⊔ u₂₂} (⊑-conj-R1 lt) {v} {w} m
+    with sub-inv lt m
+... | ⟨ u₃₁ , ⟨ fu₃₁ , ⟨ u₃₁⊆u₂₁ , ⟨ domu₃₁⊑v , w⊑codu₃₁ ⟩ ⟩ ⟩ ⟩ =
+      ⟨ u₃₁ , ⟨ fu₃₁ , ⟨ (λ {w} z → inj₁ (u₃₁⊆u₂₁ z)) ,
+                                   ⟨ domu₃₁⊑v , w⊑codu₃₁ ⟩ ⟩ ⟩ ⟩
+sub-inv {u₁} {u₂₁ ⊔ u₂₂} (⊑-conj-R2 lt) {v} {w} m
+    with sub-inv lt m
+... | ⟨ u₃₂ , ⟨ fu₃₂ , ⟨ u₃₂⊆u₂₂ , ⟨ domu₃₂⊑v , w⊑codu₃₂ ⟩ ⟩ ⟩ ⟩ =
+      ⟨ u₃₂ , ⟨ fu₃₂ , ⟨ (λ {C} z → inj₂ (u₃₂⊆u₂₂ z)) ,
+                                   ⟨ domu₃₂⊑v , w⊑codu₃₂ ⟩ ⟩ ⟩ ⟩
+sub-inv {u₁} {u₂} (⊑-trans{v = u} u₁⊑u u⊑u₂) {v} {w} v↦w∈u₁
+    with sub-inv u₁⊑u v↦w∈u₁
+... | ⟨ u′ , ⟨ fu′ , ⟨ u′⊆u , ⟨ domu′⊑v , w⊑codu′ ⟩ ⟩ ⟩ ⟩
+    with sub-inv-trans {u′} fu′ u′⊆u (sub-inv u⊑u₂)
+... | ⟨ u₃ , ⟨ fu₃ , ⟨ u₃⊆u₂ , ⟨ domu₃⊑domu′ , codu′⊑codu₃ ⟩ ⟩ ⟩ ⟩ =
+      ⟨ u₃ , ⟨ fu₃ , ⟨ u₃⊆u₂ , ⟨ ⊑-trans domu₃⊑domu′ domu′⊑v ,
+                                    ⊑-trans w⊑codu′ codu′⊑codu₃ ⟩ ⟩ ⟩ ⟩
+sub-inv {u₁₁ ↦ u₁₂} {u₂₁ ↦ u₂₂} (⊑-fun lt1 lt2) refl =
+    ⟨ u₂₁ ↦ u₂₂ , ⟨ (λ {w} → fun) , ⟨ (λ {C} z → z) , ⟨ lt1 , lt2 ⟩ ⟩ ⟩ ⟩
+sub-inv {u₂₁ ↦ (u₂₂ ⊔ u₂₃)} {u₂₁ ↦ u₂₂ ⊔ u₂₁ ↦ u₂₃} ⊑-dist
+    {.u₂₁} {.(u₂₂ ⊔ u₂₃)} refl =
+    ⟨ u₂₁ ↦ u₂₂ ⊔ u₂₁ ↦ u₂₃ , ⟨ f , ⟨ g , ⟨ ⊑-conj-L ⊑-refl ⊑-refl , ⊑-refl ⟩ ⟩ ⟩ ⟩
+  where f : all-funs (u₂₁ ↦ u₂₂ ⊔ u₂₁ ↦ u₂₃)
+        f (inj₁ x) = fun x
+        f (inj₂ y) = fun y
+        g : (u₂₁ ↦ u₂₂ ⊔ u₂₁ ↦ u₂₃) ⊆ (u₂₁ ↦ u₂₂ ⊔ u₂₁ ↦ u₂₃)
+        g (inj₁ x) = inj₁ x
+        g (inj₂ y) = inj₂ y
+\end{code}
+\end{fence}
+
+Let \texttt{v} and \texttt{w} be arbitrary values.
+
+\begin{itemize}
+\item
+  Case \texttt{⊑-bot}. So \texttt{u₁\ ≡\ ⊥}. We have
+  \texttt{v\ ↦\ w\ ∈\ ⊥}, but that is impossible.
+\item
+  Case \texttt{⊑-conj-L}.
+
+  \begin{myDisplay}
+    u₁₁ ⊑ u₂   u₁₂ ⊑ u₂
+    -------------------
+    u₁₁ ⊔ u₁₂ ⊑ u₂
+  \end{myDisplay}
+
+  Given that \texttt{v\ ↦\ w\ ∈\ u₁₁\ ⊔\ u₁₂}, there are two subcases to
+  consider.
+
+  \begin{itemize}
+  \item
+    Subcase \texttt{v\ ↦\ w\ ∈\ u₁₁}. We conclude by the induction
+    hypothesis for \texttt{u₁₁\ ⊑\ u₂}.
+  \item
+    Subcase \texttt{v\ ↦\ w\ ∈\ u₁₂}. We conclude by the induction
+    hypothesis for \texttt{u₁₂\ ⊑\ u₂}.
+  \end{itemize}
+\item
+  Case \texttt{⊑-conj-R1}.
+
+  \begin{myDisplay}
+    u₁ ⊑ u₂₁
+    --------------
+    u₁ ⊑ u₂₁ ⊔ u₂₂
+  \end{myDisplay}
+
+  Given that \texttt{v\ ↦\ w\ ∈\ u₁}, the induction hypothesis for
+  \texttt{u₁\ ⊑\ u₂₁} gives us that \texttt{v\ ↦\ w} factors
+  \texttt{u₂₁} into \texttt{u₃₁} for some \texttt{u₃₁}. To show that
+  \texttt{v\ ↦\ w} also factors \texttt{u₂₁\ ⊔\ u₂₂} into \texttt{u₃₁},
+  we just need to show that \texttt{u₃₁\ ⊆\ u₂₁\ ⊔\ u₂₂}, but that
+  follows directly from \texttt{u₃₁\ ⊆\ u₂₁}.
+\item
+  Case \texttt{⊑-conj-R2}. This case follows by reasoning similar to the
+  case for \texttt{⊑-conj-R1}.
+\item
+  Case \texttt{⊑-trans}.
+
+  \begin{myDisplay}
+    u₁ ⊑ u   u ⊑ u₂
+    ---------------
+        u₁ ⊑ u₂
+  \end{myDisplay}
+
+  By the induction hypothesis for \texttt{u₁\ ⊑\ u}, we know that
+  \texttt{v\ ↦\ w} factors \texttt{u} into \texttt{u′}, for some value
+  \texttt{u′}, so we have \texttt{all-funs\ u′} and \texttt{u′\ ⊆\ u}.
+  By the induction hypothesis for \texttt{u\ ⊑\ u₂}, we know that for
+  any \texttt{v′\ ↦\ w′\ ∈\ u}, \texttt{v′\ ↦\ w′} factors \texttt{u₂}.
+  Now we apply the lemma sub-inv-trans, which gives us some \texttt{u₃}
+  such that \texttt{(⨆dom\ u′)\ ↦\ (⨆cod\ u′)} factors \texttt{u₂} into
+  \texttt{u₃}. We show that \texttt{v\ ↦\ w} also factors \texttt{u₂}
+  into \texttt{u₃}. From \texttt{⨆dom\ u₃\ ⊑\ ⨆dom\ u′} and
+  \texttt{⨆dom\ u′\ ⊑\ v}, we have \texttt{⨆dom\ u₃\ ⊑\ v}. From
+  \texttt{w\ ⊑\ ⨆cod\ u′} and \texttt{⨆cod\ u′\ ⊑\ ⨆cod\ u₃}, we have
+  \texttt{w\ ⊑\ ⨆cod\ u₃}, and this case is complete.
+\item
+  Case \texttt{⊑-fun}.
+
+  \begin{myDisplay}
+    u₂₁ ⊑ u₁₁  u₁₂ ⊑ u₂₂
+    ---------------------
+    u₁₁ ↦ u₁₂ ⊑ u₂₁ ↦ u₂₂
+  \end{myDisplay}
+
+  Given that \texttt{v\ ↦\ w\ ∈\ u₁₁\ ↦\ u₁₂}, we have
+  \texttt{v\ ≡\ u₁₁} and \texttt{w\ ≡\ u₁₂}. We show that
+  \texttt{u₁₁\ ↦\ u₁₂} factors \texttt{u₂₁\ ↦\ u₂₂} into itself. We need
+  to show that \texttt{⨆dom\ (u₂₁\ ↦\ u₂₂)\ ⊑\ u₁₁} and
+  \texttt{u₁₂\ ⊑\ ⨆cod\ (u₂₁\ ↦\ u₂₂)}, but that is equivalent to our
+  premises \texttt{u₂₁\ ⊑\ u₁₁} and \texttt{u₁₂\ ⊑\ u₂₂}.
+\item
+  Case \texttt{⊑-dist}.
+
+  \begin{myDisplay}
+    ---------------------------------------------
+    u₂₁ ↦ (u₂₂ ⊔ u₂₃) ⊑ (u₂₁ ↦ u₂₂) ⊔ (u₂₁ ↦ u₂₃)
+  \end{myDisplay}
+
+  Given that \texttt{v\ ↦\ w\ ∈\ u₂₁\ ↦\ (u₂₂\ ⊔\ u₂₃)}, we have
+  \texttt{v\ ≡\ u₂₁} and \texttt{w\ ≡\ u₂₂\ ⊔\ u₂₃}. We show that
+  \texttt{u₂₁\ ↦\ (u₂₂\ ⊔\ u₂₃)} factors
+  \texttt{(u₂₁\ ↦\ u₂₂)\ ⊔\ (u₂₁\ ↦\ u₂₃)} into itself. We have
+  \texttt{u₂₁\ ⊔\ u₂₁\ ⊑\ u₂₁}, and also
+  \texttt{u₂₂\ ⊔\ u₂₃\ ⊑\ u₂₂\ ⊔\ u₂₃}, so the proof is complete.
+\end{itemize}
+
+We conclude this section with two corollaries of the sub-inv lemma.
+First, we have the following property that is convenient to use in later
+proofs. We specialize the premise to just \texttt{v\ ↦\ w\ ⊑\ u₁} and we
+modify the conclusion to say that for every \texttt{v′\ ↦\ w′\ ∈\ u₂},
+we have \texttt{v′\ ⊑\ v}.
+
+\begin{fence}
+\begin{code}
+sub-inv-fun : ∀{v w u₁ : Value}
+    → (v ↦ w) ⊑ u₁
+      -----------------------------------------------------
+    → Σ[ u₂ ∈ Value ] all-funs u₂ × u₂ ⊆ u₁
+        × (∀{v′ w′} → (v′ ↦ w′) ∈ u₂ → v′ ⊑ v) × w ⊑ ⨆cod u₂
+sub-inv-fun{v}{w}{u₁} abc
+    with sub-inv abc {v}{w} refl
+... | ⟨ u₂ , ⟨ f , ⟨ u₂⊆u₁ , ⟨ db , cc ⟩ ⟩ ⟩ ⟩ =
+      ⟨ u₂ , ⟨ f , ⟨ u₂⊆u₁ , ⟨ G , cc ⟩ ⟩ ⟩ ⟩
+   where G : ∀{D E} → (D ↦ E) ∈ u₂ → D ⊑ v
+         G{D}{E} m = ⊑-trans (⊆→⊑ (↦∈→⊆⨆dom f m)) db
+\end{code}
+\end{fence}
+
+The second corollary is the inversion rule that one would expect for
+less-than with functions on the left and right-hand sides.
+
+\begin{fence}
+\begin{code}
+↦⊑↦-inv : ∀{v w v′ w′}
+        → v ↦ w ⊑ v′ ↦ w′
+          -----------------
+        → v′ ⊑ v × w ⊑ w′
+↦⊑↦-inv{v}{w}{v′}{w′} lt
+    with sub-inv-fun lt
+... | ⟨ Γ , ⟨ f , ⟨ Γ⊆v34 , ⟨ lt1 , lt2 ⟩ ⟩ ⟩ ⟩
+    with all-funs∈ f
+... | ⟨ u , ⟨ u′ , u↦u′∈Γ ⟩ ⟩
+    with Γ⊆v34 u↦u′∈Γ
+... | refl =
+  let ⨆codΓ⊆w′ = ⊆↦→⨆cod⊆ Γ⊆v34 in
+  ⟨ lt1 u↦u′∈Γ , ⊑-trans lt2 (⊆→⊑ ⨆codΓ⊆w′) ⟩
+\end{code}
+\end{fence}
+
+\hypertarget{notes}{%
+\section{Notes}\label{notes}}
+
+The denotational semantics presented in this chapter is an example of a
+\emph{filter model} (Barendregt, Coppo, Dezani-Ciancaglini, 1983).
+Filter models use type systems with intersection types to precisely
+characterize runtime behavior (Coppo, Dezani-Ciancaglini, and Salle,
+1979). The notation that we use in this chapter is not that of type
+systems and intersection types, but the \texttt{Value} data type is
+isomorphic to types (\texttt{↦} is \texttt{→}, \texttt{⊔} is \texttt{∧},
+\texttt{⊥} is \texttt{⊤}), the \texttt{⊑} relation is the inverse of
+subtyping \texttt{\textless{}:}, and the evaluation relation
+\texttt{ρ\ ⊢\ M\ ↓\ v} is isomorphic to a type system. Write \texttt{Γ}
+instead of \texttt{ρ}, \texttt{A} instead of \texttt{v}, and replace
+\texttt{↓} with \texttt{:} and one has a typing judgement
+\texttt{Γ\ ⊢\ M\ :\ A}. By varying the definition of subtyping and using
+different choices of type atoms, intersection type systems provide
+semantics for many different untyped λ calculi, from full beta to the
+lazy and call-by-value calculi (Alessi, Barbanera, and
+Dezani-Ciancaglini, 2006) (Rocca and Paolini, 2004). The denotational
+semantics in this chapter corresponds to the BCD system (Barendregt,
+Coppo, Dezani-Ciancaglini, 1983). Part 3 of the book \emph{Lambda
+Calculus with Types} describes a framework for intersection type systems
+that enables results similar to the ones in this chapter, but for the
+entire family of intersection type systems (Barendregt, Dekkers, and
+Statman, 2013).
+
+The two ideas of using finite tables to represent functions and of
+relaxing table lookup to enable self application first appeared in a
+technical report by Gordon Plotkin (1972) and are later described in an
+article in Theoretical Computer Science (Plotkin 1993). In that work,
+the inductive definition of \texttt{Value} is a bit different than the
+one we use:
+
+\begin{myDisplay}
+Value = C + ℘f(Value) × ℘f(Value)
+\end{myDisplay}
+
+where \texttt{C} is a set of constants and \texttt{℘f} means finite
+powerset. The pairs in \texttt{℘f(Value)\ ×\ ℘f(Value)} represent
+input-output mappings, just as in this chapter. The finite powersets are
+used to enable a function table to appear in the input and in the
+output. These differences amount to changing where the recursion appears
+in the definition of \texttt{Value}. Plotkin's model is an example of a
+\emph{graph model} of the untyped lambda calculus (Barendregt, 1984). In
+a graph model, the semantics is presented as a function from programs
+and environments to (possibly infinite) sets of values. The semantics in
+this chapter is instead defined as a relation, but set-valued functions
+are isomorphic to relations. Indeed, we present the semantics as a
+function in the next chapter and prove that it is equivalent to the
+relational version.
+
+Dana Scott's ℘(ω) (1976) and Engeler's B(A) (1981) are two more examples
+of graph models. Both use the following inductive definition of
+\texttt{Value}.
+
+\begin{myDisplay}
+Value = C + ℘f(Value) × Value
+\end{myDisplay}
+
+The use of \texttt{Value} instead of \texttt{℘f(Value)} in the output
+does not restrict expressiveness compared to Plotkin's model because the
+semantics use sets of values and a pair of sets \texttt{(V,\ V′)} can be
+represented as a set of pairs
+\texttt{\{\ (V,\ v′)\ \textbar{}\ v′\ ∈\ V′\ \}}. In Scott's ℘(ω), the
+above values are mapped to and from the natural numbers using a kind of
+Godel encoding.
+
+\hypertarget{references}{%
+\section{References}\label{references}}
+
+\begin{itemize}
+\item
+  Intersection Types and Lambda Models. Fabio Alessi, Franco Barbanera,
+  and Mariangiola Dezani-Ciancaglini, Theoretical Compututer Science,
+  vol.~355, pages 108-126, 2006.
+\item
+  The Lambda Calculus. H.P. Barendregt, 1984.
+\item
+  A filter lambda model and the completeness of type assignment. Henk
+  Barendregt, Mario Coppo, and Mariangiola Dezani-Ciancaglini, Journal
+  of Symbolic Logic, vol.~48, pages 931-940, 1983.
+\item
+  Lambda Calculus with Types. Henk Barendregt, Wil Dekkers, and Richard
+  Statman, Cambridge University Press, Perspectives in Logic,
+
+  \begin{enumerate}
+  \def\labelenumi{\arabic{enumi}.}
+  \setcounter{enumi}{2012}
+  \tightlist
+  \item
+  \end{enumerate}
+\item
+  Functional characterization of some semantic equalities inside
+  λ-calculus. Mario Coppo, Mariangiola Dezani-Ciancaglini, and Patrick
+  Salle, in Sixth Colloquium on Automata, Languages and Programming.
+  Springer, pages 133--146, 1979.
+\item
+  Algebras and combinators. Erwin Engeler, Algebra Universalis, vol.~13,
+  pages 389-392, 1981.
+\item
+  A Set-Theoretical Definition of Application. Gordon D. Plotkin,
+  University of Edinburgh, Technical Report MIP-R-95, 1972.
+\item
+  Set-theoretical and other elementary models of the λ-calculus. Gordon
+  D. Plotkin, Theoretical Computer Science, vol.~121, pages 351-409,
+  1993.
+\item
+  The Parametric Lambda Calculus. Simona Ronchi Della Rocca and Luca
+  Paolini, Springer, 2004.
+\item
+  Data Types as Lattices. Dana Scott, SIAM Journal on Computing, vol.~5,
+  pages 522-587, 1976.
+\end{itemize}
+
+\hypertarget{unicode}{%
+\section{Unicode}\label{unicode}}
+
+This chapter uses the following unicode:
+
+\begin{myDisplay}
+⊥  U+22A5  UP TACK (\bot)
+↦  U+21A6  RIGHTWARDS ARROW FROM BAR (\mapsto)
+⊔  U+2294  SQUARE CUP (\lub)
+⊑  U+2291  SQUARE IMAGE OF OR EQUAL TO (\sqsubseteq)
+⨆ U+2A06  N-ARY SQUARE UNION OPERATOR (\Lub)
+⊢  U+22A2  RIGHT TACK (\|- or \vdash)
+↓  U+2193  DOWNWARDS ARROW (\d)
+ᶜ  U+1D9C  MODIFIER LETTER SMALL C (\^c)
+ℰ  U+2130  SCRIPT CAPITAL E (\McE)
+≃  U+2243  ASYMPTOTICALLY EQUAL TO (\~- or \simeq)
+∈  U+2208  ELEMENT OF (\in)
+⊆  U+2286  SUBSET OF OR EQUAL TO (\sub= or \subseteq)
+\end{myDisplay}
+
