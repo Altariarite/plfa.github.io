@@ -1,4 +1,7 @@
-.PHONY: all_tex clean
+# The directory structure is important here
+# Font choice, scripts and files are all written based on relative paths
+
+.PHONY: all all_tex clean
 
 SRC := ../src
 SITE := ../_site
