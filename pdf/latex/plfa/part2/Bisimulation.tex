@@ -1,0 +1,1370 @@
+\hypertarget{Bisimulation}{%
+\chapter{Bisimulation: Relating reduction systems}\label{Bisimulation}}
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{module}\AgdaSpace{}%
+\AgdaModule{plfa.part2.Bisimulation}\AgdaSpace{}%
+\AgdaKeyword{where}\<%
+\end{code}
+\end{fence}
+
+Some constructs can be defined in terms of other constructs. In the
+previous chapter, we saw how \emph{let} terms can be rewritten as an
+application of an abstraction, and how two alternative formulations of
+products --- one with projections and one with case --- can be
+formulated in terms of each other. In this chapter, we look at how to
+formalise such claims.
+
+Given two different systems, with different terms and reduction rules,
+we define what it means to claim that one \emph{simulates} the other.
+Let's call our two systems \emph{source} and \emph{target}. Let
+\texttt{M}, \texttt{N} range over terms of the source, and \texttt{M†},
+\texttt{N†} range over terms of the target. We define a relation
+
+\begin{myDisplay}
+M ~ M†
+\end{myDisplay}
+
+between corresponding terms of the two systems. We have a
+\emph{simulation} of the source by the target if every reduction in the
+source has a corresponding reduction sequence in the target:
+
+\emph{Simulation}: For every \texttt{M}, \texttt{M†}, and \texttt{N}: If
+\texttt{M\ \textasciitilde{}\ M†} and \texttt{M\ —→\ N} then
+\texttt{M†\ —↠\ N†} and \texttt{N\ \textasciitilde{}\ N†} for some
+\texttt{N†}.
+
+Or, in a diagram:
+
+\begin{myDisplay}
+M  --- —→ --- N
+|             |
+|             |
+~             ~
+|             |
+|             |
+M† --- —↠ --- N†
+\end{myDisplay}
+
+Sometimes we will have a stronger condition, where each reduction in the
+source corresponds to a reduction (rather than a reduction sequence) in
+the target:
+
+\begin{myDisplay}
+M  --- —→ --- N
+|             |
+|             |
+~             ~
+|             |
+|             |
+M† --- —→ --- N†
+\end{myDisplay}
+
+This stronger condition is known as \emph{lock-step} or \emph{on the
+nose} simulation.
+
+We are particularly interested in the situation where there is also a
+simulation from the target to the source: every reduction in the target
+has a corresponding reduction sequence in the source. This situation is
+called a \emph{bisimulation}.
+
+Simulation is established by case analysis over all possible reductions
+and all possible terms to which they are related. For each reduction
+step in the source we must show a corresponding reduction sequence in
+the target.
+
+For instance, the source might be lambda calculus with \emph{let} added,
+and the target the same system with \texttt{let} translated out. The key
+rule defining our relation will be:
+
+\begin{myDisplay}
+M ~ M†
+N ~ N†
+--------------------------------
+let x = M in N ~ (ƛ x ⇒ N†) · M†
+\end{myDisplay}
+
+All the other rules are congruences: variables relate to themselves, and
+abstractions and applications relate if their components relate:
+
+\begin{myDisplay}
+-----
+x ~ x
+
+N ~ N†
+------------------
+ƛ x ⇒ N ~ ƛ x ⇒ N†
+
+L ~ L†
+M ~ M†
+---------------
+L · M ~ L† · M†
+\end{myDisplay}
+
+Covering the other constructs of our language --- naturals, fixpoints,
+products, and so on --- would add little save length.
+
+In this case, our relation can be specified by a function from source to
+target:
+
+\begin{myDisplay}
+(x) †               =  x
+(ƛ x ⇒ N) †         =  ƛ x ⇒ (N †)
+(L · M) †           =  (L †) · (M †)
+(let x = M in N) †  =  (ƛ x ⇒ (N †)) · (M †)
+\end{myDisplay}
+
+And we have
+
+\begin{myDisplay}
+M † ≡ N
+-------
+M ~ N
+\end{myDisplay}
+
+and conversely. But in general we may have a relation without any
+corresponding function.
+
+This chapter formalises establishing that \texttt{\textasciitilde{}} as
+defined above is a simulation from source to target. We leave
+establishing it in the reverse direction as an exercise. Another
+exercise is to show the alternative formulations of products in Chapter
+\protect\hyperlink{More}{More} are in bisimulation.
+
+\hypertarget{imports}{%
+\section{Imports}\label{imports}}
+
+We import our source language from Chapter
+\protect\hyperlink{More}{More}:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{plfa.part2.More}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{simulation}{%
+\section{Simulation}\label{simulation}}
+
+The simulation is a straightforward formalisation of the rules in the
+introduction:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{infix}%
+\>[7]\AgdaNumber{4}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\AgdaUnderscore{}\textasciitilde{}\AgdaUnderscore{}}}\<%
+\\
+\>[0]\AgdaKeyword{infix}%
+\>[7]\AgdaNumber{5}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{\textasciitilde{}ƛ\AgdaUnderscore{}}}\<%
+\\
+\>[0]\AgdaKeyword{infix}%
+\>[7]\AgdaNumber{7}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{\AgdaUnderscore{}\textasciitilde{}·\AgdaUnderscore{}}}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0]\AgdaKeyword{data}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\AgdaUnderscore{}\textasciitilde{}\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSpace{}%
+\AgdaKeyword{where}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaInductiveConstructor{\textasciitilde{}`}%
+\>[23I]\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{∋}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[.][@{}l@{}]\<[23I]%
+\>[5]\AgdaComment{---------}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[3]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{`}}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\textasciitilde{}}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{`}}\AgdaSpace{}%
+\AgdaBound{x}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+%
+\>[2]\AgdaOperator{\AgdaInductiveConstructor{\textasciitilde{}ƛ\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{N}\AgdaSpace{}%
+\AgdaBound{N†}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSymbol{\}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{→}%
+\>[50I]\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\textasciitilde{}}}\AgdaSpace{}%
+\AgdaBound{N†}\<%
+\\
+\>[.][@{}l@{}]\<[50I]%
+\>[6]\AgdaComment{----------}\<%
+\\
+%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{ƛ}}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\textasciitilde{}}}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{ƛ}}\AgdaSpace{}%
+\AgdaBound{N†}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+%
+\>[2]\AgdaOperator{\AgdaInductiveConstructor{\AgdaUnderscore{}\textasciitilde{}·\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{L}\AgdaSpace{}%
+\AgdaBound{L†}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{⇒}}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{M}\AgdaSpace{}%
+\AgdaBound{M†}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\textasciitilde{}}}\AgdaSpace{}%
+\AgdaBound{L†}\<%
+\\
+%
+\>[4]\AgdaSymbol{→}%
+\>[80I]\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\textasciitilde{}}}\AgdaSpace{}%
+\AgdaBound{M†}\<%
+\\
+\>[.][@{}l@{}]\<[80I]%
+\>[6]\AgdaComment{---------------}\<%
+\\
+%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{L}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{·}}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\textasciitilde{}}}\AgdaSpace{}%
+\AgdaBound{L†}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{·}}\AgdaSpace{}%
+\AgdaBound{M†}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+%
+\>[2]\AgdaInductiveConstructor{\textasciitilde{}let}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{M}\AgdaSpace{}%
+\AgdaBound{M†}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{N}\AgdaSpace{}%
+\AgdaBound{N†}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSymbol{\}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\textasciitilde{}}}\AgdaSpace{}%
+\AgdaBound{M†}\<%
+\\
+%
+\>[4]\AgdaSymbol{→}%
+\>[112I]\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\textasciitilde{}}}\AgdaSpace{}%
+\AgdaBound{N†}\<%
+\\
+\>[.][@{}l@{}]\<[112I]%
+\>[6]\AgdaComment{----------------------}\<%
+\\
+%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaInductiveConstructor{`let}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\textasciitilde{}}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaInductiveConstructor{ƛ}}\AgdaSpace{}%
+\AgdaBound{N†}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{·}}\AgdaSpace{}%
+\AgdaBound{M†}\<%
+\end{code}
+\end{fence}
+
+The language in Chapter \protect\hyperlink{More}{More} has more
+constructs, which we could easily add. However, leaving the simulation
+small lets us focus on the essence. It's a handy technical trick that we
+can have a large source language, but only bother to include in the
+simulation the terms of interest.
+
+\hypertarget{exercise-_-practice}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{\_†}
+(practice)}{Exercise \_† (practice)}}\label{exercise-_-practice}}
+
+Formalise the translation from source to target given in the
+introduction. Show that \texttt{M\ †\ ≡\ N} implies
+\texttt{M\ \textasciitilde{}\ N}, and conversely.
+
+\textbf{Hint:} For simplicity, we focus on only a few constructs of the
+language, so \texttt{\_†} should be defined only on relevant terms. One
+way to do this is to use a decidable predicate to pick out terms in the
+domain of \texttt{\_†}, using
+\protect\hyperlink{Decidable-proof-by-reflection}{proof by reflection}.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- Your code goes here}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{simulation-commutes-with-values}{%
+\section{Simulation commutes with
+values}\label{simulation-commutes-with-values}}
+
+We need a number of technical results. The first is that simulation
+commutes with values. That is, if \texttt{M\ \textasciitilde{}\ M†} and
+\texttt{M} is a value then \texttt{M†} is also a value:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{\textasciitilde{}val}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{M}\AgdaSpace{}%
+\AgdaBound{M†}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\textasciitilde{}}}\AgdaSpace{}%
+\AgdaBound{M†}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}%
+\>[136I]\AgdaDatatype{Value}\AgdaSpace{}%
+\AgdaBound{M}\<%
+\\
+\>[.][@{}l@{}]\<[136I]%
+\>[4]\AgdaComment{--------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaDatatype{Value}\AgdaSpace{}%
+\AgdaBound{M†}\<%
+\\
+\>[0]\AgdaFunction{\textasciitilde{}val}\AgdaSpace{}%
+\AgdaInductiveConstructor{\textasciitilde{}`}%
+\>[18]\AgdaSymbol{()}\<%
+\\
+\>[0]\AgdaFunction{\textasciitilde{}val}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaInductiveConstructor{\textasciitilde{}ƛ}}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}N}\AgdaSymbol{)}%
+\>[18]\AgdaInductiveConstructor{V-ƛ}%
+\>[23]\AgdaSymbol{=}%
+\>[26]\AgdaInductiveConstructor{V-ƛ}\<%
+\\
+\>[0]\AgdaFunction{\textasciitilde{}val}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{\textasciitilde{}L}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{\textasciitilde{}·}}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}M}\AgdaSymbol{)}%
+\>[18]\AgdaSymbol{()}\<%
+\\
+\>[0]\AgdaFunction{\textasciitilde{}val}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{\textasciitilde{}let}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}M}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}N}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{()}\<%
+\end{code}
+\end{fence}
+
+It is a straightforward case analysis, where here the only value of
+interest is a lambda abstraction.
+
+\hypertarget{exercise-valuxb9-practice}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{\textasciitilde{}val⁻¹}
+(practice)}{Exercise \textasciitilde val⁻¹ (practice)}}\label{exercise-valuxb9-practice}}
+
+Show that this also holds in the reverse direction: if
+\texttt{M\ \textasciitilde{}\ M†} and \texttt{Value\ M†} then
+\texttt{Value\ M}.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- Your code goes here}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{simulation-commutes-with-renaming}{%
+\section{Simulation commutes with
+renaming}\label{simulation-commutes-with-renaming}}
+
+The next technical result is that simulation commutes with renaming.
+That is, if \texttt{ρ} maps any judgment \texttt{Γ\ ∋\ A} to a judgment
+\texttt{Δ\ ∋\ A}, and if \texttt{M\ \textasciitilde{}\ M†} then
+\texttt{rename\ ρ\ M\ \textasciitilde{}\ rename\ ρ\ M†}:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{\textasciitilde{}rename}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{Δ}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}%
+\>[154I]\AgdaSymbol{(}\AgdaBound{ρ}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{∋}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{Δ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{∋}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\<%
+\\
+\>[.][@{}l@{}]\<[154I]%
+\>[4]\AgdaComment{----------------------------------------------------------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{M}\AgdaSpace{}%
+\AgdaBound{M†}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\textasciitilde{}}}\AgdaSpace{}%
+\AgdaBound{M†}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaFunction{rename}\AgdaSpace{}%
+\AgdaBound{ρ}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\textasciitilde{}}}\AgdaSpace{}%
+\AgdaFunction{rename}\AgdaSpace{}%
+\AgdaBound{ρ}\AgdaSpace{}%
+\AgdaBound{M†}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{\textasciitilde{}rename}\AgdaSpace{}%
+\AgdaBound{ρ}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{\textasciitilde{}`}\AgdaSymbol{)}%
+\>[24]\AgdaSymbol{=}%
+\>[27]\AgdaInductiveConstructor{\textasciitilde{}`}\<%
+\\
+\>[0]\AgdaFunction{\textasciitilde{}rename}\AgdaSpace{}%
+\AgdaBound{ρ}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaInductiveConstructor{\textasciitilde{}ƛ}}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}N}\AgdaSymbol{)}%
+\>[24]\AgdaSymbol{=}%
+\>[27]\AgdaOperator{\AgdaInductiveConstructor{\textasciitilde{}ƛ}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{\textasciitilde{}rename}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{ext}\AgdaSpace{}%
+\AgdaBound{ρ}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}N}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{\textasciitilde{}rename}\AgdaSpace{}%
+\AgdaBound{ρ}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{\textasciitilde{}L}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{\textasciitilde{}·}}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}M}\AgdaSymbol{)}%
+\>[24]\AgdaSymbol{=}%
+\>[27]\AgdaSymbol{(}\AgdaFunction{\textasciitilde{}rename}\AgdaSpace{}%
+\AgdaBound{ρ}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}L}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{\textasciitilde{}·}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{\textasciitilde{}rename}\AgdaSpace{}%
+\AgdaBound{ρ}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}M}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{\textasciitilde{}rename}\AgdaSpace{}%
+\AgdaBound{ρ}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{\textasciitilde{}let}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}M}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}N}\AgdaSymbol{)}%
+\>[24]\AgdaSymbol{=}%
+\>[27]\AgdaInductiveConstructor{\textasciitilde{}let}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{\textasciitilde{}rename}\AgdaSpace{}%
+\AgdaBound{ρ}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}M}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{\textasciitilde{}rename}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{ext}\AgdaSpace{}%
+\AgdaBound{ρ}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}N}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+The structure of the proof is similar to the structure of renaming
+itself: reconstruct each term with recursive invocation, extending the
+environment where appropriate (in this case, only for the body of an
+abstraction).
+
+\hypertarget{simulation-commutes-with-substitution}{%
+\section{Simulation commutes with
+substitution}\label{simulation-commutes-with-substitution}}
+
+The third technical result is that simulation commutes with
+substitution. It is more complex than renaming, because where we had one
+renaming map \texttt{ρ} here we need two substitution maps, \texttt{σ}
+and \texttt{σ†}.
+
+The proof first requires we establish an analogue of extension. If
+\texttt{σ} and \texttt{σ†} both map any judgment \texttt{Γ\ ∋\ A} to a
+judgment \texttt{Δ\ ⊢\ A}, such that for every \texttt{x} in
+\texttt{Γ\ ∋\ A} we have \texttt{σ\ x\ \textasciitilde{}\ σ†\ x}, then
+for any \texttt{x} in \texttt{Γ\ ,\ B\ ∋\ A} we have
+\texttt{exts\ σ\ x\ \textasciitilde{}\ exts\ σ†\ x}:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{\textasciitilde{}exts}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{Δ}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{σ}%
+\>[8]\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{∋}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{Δ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{σ†}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{∋}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{Δ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}%
+\>[243I]\AgdaSymbol{(∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{∋}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{σ}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\textasciitilde{}}}\AgdaSpace{}%
+\AgdaBound{σ†}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\<%
+\\
+\>[.][@{}l@{}]\<[243I]%
+\>[4]\AgdaComment{--------------------------------------------------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{∋}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaFunction{exts}\AgdaSpace{}%
+\AgdaBound{σ}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\textasciitilde{}}}\AgdaSpace{}%
+\AgdaFunction{exts}\AgdaSpace{}%
+\AgdaBound{σ†}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{\textasciitilde{}exts}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}σ}\AgdaSpace{}%
+\AgdaInductiveConstructor{Z}%
+\>[16]\AgdaSymbol{=}%
+\>[19]\AgdaInductiveConstructor{\textasciitilde{}`}\<%
+\\
+\>[0]\AgdaFunction{\textasciitilde{}exts}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}σ}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaInductiveConstructor{S}}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}%
+\>[16]\AgdaSymbol{=}%
+\>[19]\AgdaFunction{\textasciitilde{}rename}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{S\AgdaUnderscore{}}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{\textasciitilde{}σ}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+The structure of the proof is similar to the structure of extension
+itself. The newly introduced variable trivially relates to itself, and
+otherwise we apply renaming to the hypothesis.
+
+With extension under our belts, it is straightforward to show
+substitution commutes. If \texttt{σ} and \texttt{σ†} both map any
+judgment \texttt{Γ\ ∋\ A} to a judgment \texttt{Δ\ ⊢\ A}, such that for
+every \texttt{x} in \texttt{Γ\ ∋\ A} we have
+\texttt{σ\ x\ \textasciitilde{}\ σ†\ x}, and if
+\texttt{M\ \textasciitilde{}\ M†}, then
+\texttt{subst\ σ\ M\ \textasciitilde{}\ subst\ σ†\ M†}:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{\textasciitilde{}subst}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{Δ}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{σ}%
+\>[8]\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{∋}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{Δ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{σ†}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{∋}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{Δ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}%
+\>[311I]\AgdaSymbol{(∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{∋}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{σ}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\textasciitilde{}}}\AgdaSpace{}%
+\AgdaBound{σ†}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}\<%
+\\
+\>[.][@{}l@{}]\<[311I]%
+\>[4]\AgdaComment{---------------------------------------------------------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{M}\AgdaSpace{}%
+\AgdaBound{M†}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\textasciitilde{}}}\AgdaSpace{}%
+\AgdaBound{M†}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaFunction{subst}\AgdaSpace{}%
+\AgdaBound{σ}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\textasciitilde{}}}\AgdaSpace{}%
+\AgdaFunction{subst}\AgdaSpace{}%
+\AgdaBound{σ†}\AgdaSpace{}%
+\AgdaBound{M†}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{\textasciitilde{}subst}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}σ}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{\textasciitilde{}`}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaArgument{x}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{\})}%
+\>[24]\AgdaSymbol{=}%
+\>[27]\AgdaBound{\textasciitilde{}σ}\AgdaSpace{}%
+\AgdaBound{x}\<%
+\\
+\>[0]\AgdaFunction{\textasciitilde{}subst}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}σ}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaInductiveConstructor{\textasciitilde{}ƛ}}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}N}\AgdaSymbol{)}%
+\>[24]\AgdaSymbol{=}%
+\>[27]\AgdaOperator{\AgdaInductiveConstructor{\textasciitilde{}ƛ}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{\textasciitilde{}subst}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{\textasciitilde{}exts}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}σ}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}N}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{\textasciitilde{}subst}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}σ}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{\textasciitilde{}L}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{\textasciitilde{}·}}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}M}\AgdaSymbol{)}%
+\>[24]\AgdaSymbol{=}%
+\>[27]\AgdaSymbol{(}\AgdaFunction{\textasciitilde{}subst}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}σ}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}L}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{\textasciitilde{}·}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{\textasciitilde{}subst}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}σ}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}M}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{\textasciitilde{}subst}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}σ}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{\textasciitilde{}let}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}M}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}N}\AgdaSymbol{)}%
+\>[24]\AgdaSymbol{=}%
+\>[27]\AgdaInductiveConstructor{\textasciitilde{}let}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{\textasciitilde{}subst}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}σ}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}M}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{\textasciitilde{}subst}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{\textasciitilde{}exts}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}σ}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}N}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+Again, the structure of the proof is similar to the structure of
+substitution itself: reconstruct each term with recursive invocation,
+extending the environment where appropriate (in this case, only for the
+body of an abstraction).
+
+From the general case of substitution, it is also easy to derive the
+required special case. If \texttt{N\ \textasciitilde{}\ N†} and
+\texttt{M\ \textasciitilde{}\ M†}, then
+\texttt{N\ {[}\ M\ {]}\ \textasciitilde{}\ N†\ {[}\ M†\ {]}}:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{\textasciitilde{}sub}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{N}\AgdaSpace{}%
+\AgdaBound{N†}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{M}\AgdaSpace{}%
+\AgdaBound{M†}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\textasciitilde{}}}\AgdaSpace{}%
+\AgdaBound{N†}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}%
+\>[401I]\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\textasciitilde{}}}\AgdaSpace{}%
+\AgdaBound{M†}\<%
+\\
+\>[.][@{}l@{}]\<[401I]%
+\>[4]\AgdaComment{-----------------------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{[}}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{]}}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\textasciitilde{}}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{N†}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{[}}\AgdaSpace{}%
+\AgdaBound{M†}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{]}}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{\textasciitilde{}sub}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{B}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}N}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}M}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaFunction{\textasciitilde{}subst}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaFunction{\textasciitilde{}σ}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}N}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaKeyword{where}\<%
+\\
+%
+\>[2]\AgdaFunction{\textasciitilde{}σ}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{x}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{,}}\AgdaSpace{}%
+\AgdaBound{B}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{∋}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{\AgdaUnderscore{}}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\textasciitilde{}}}\AgdaSpace{}%
+\AgdaSymbol{\AgdaUnderscore{}}\<%
+\\
+%
+\>[2]\AgdaFunction{\textasciitilde{}σ}\AgdaSpace{}%
+\AgdaInductiveConstructor{Z}%
+\>[12]\AgdaSymbol{=}%
+\>[15]\AgdaBound{\textasciitilde{}M}\<%
+\\
+%
+\>[2]\AgdaFunction{\textasciitilde{}σ}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaInductiveConstructor{S}}\AgdaSpace{}%
+\AgdaBound{x}\AgdaSymbol{)}%
+\>[12]\AgdaSymbol{=}%
+\>[15]\AgdaInductiveConstructor{\textasciitilde{}`}\<%
+\end{code}
+\end{fence}
+
+Once more, the structure of the proof resembles the original.
+
+\hypertarget{the-relation-is-a-simulation}{%
+\section{The relation is a
+simulation}\label{the-relation-is-a-simulation}}
+
+Finally, we can show that the relation actually is a simulation. In
+fact, we will show the stronger condition of a lock-step simulation.
+What we wish to show is:
+
+\emph{Lock-step simulation}: For every \texttt{M}, \texttt{M†}, and
+\texttt{N}: If \texttt{M\ \textasciitilde{}\ M†} and \texttt{M\ —→\ N}
+then \texttt{M†\ —→\ N†} and \texttt{N\ \textasciitilde{}\ N†} for some
+\texttt{N†}.
+
+Or, in a diagram:
+
+\begin{myDisplay}
+M  --- —→ --- N
+|             |
+|             |
+~             ~
+|             |
+|             |
+M† --- —→ --- N†
+\end{myDisplay}
+
+We first formulate a concept corresponding to the lower leg of the
+diagram, that is, its right and bottom edges:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{data}\AgdaSpace{}%
+\AgdaDatatype{Leg}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{M†}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaPrimitiveType{Set}\AgdaSpace{}%
+\AgdaKeyword{where}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaInductiveConstructor{leg}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{N†}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\textasciitilde{}}}\AgdaSpace{}%
+\AgdaBound{N†}\<%
+\\
+%
+\>[4]\AgdaSymbol{→}%
+\>[467I]\AgdaBound{M†}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{—→}}\AgdaSpace{}%
+\AgdaBound{N†}\<%
+\\
+\>[.][@{}l@{}]\<[467I]%
+\>[6]\AgdaComment{--------}\<%
+\\
+%
+\>[4]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaDatatype{Leg}\AgdaSpace{}%
+\AgdaBound{M†}\AgdaSpace{}%
+\AgdaBound{N}\<%
+\end{code}
+\end{fence}
+
+For our formalisation, in this case, we can use a stronger relation than
+\texttt{—↠}, replacing it by \texttt{—→}.
+
+We can now state and prove that the relation is a simulation. Again, in
+this case, we can use a stronger relation than \texttt{—↠}, replacing it
+by \texttt{—→}:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{sim}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\AgdaSpace{}%
+\AgdaSymbol{\{}\AgdaBound{M}\AgdaSpace{}%
+\AgdaBound{M†}\AgdaSpace{}%
+\AgdaBound{N}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaBound{Γ}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{⊢}}\AgdaSpace{}%
+\AgdaBound{A}\AgdaSymbol{\}}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{\textasciitilde{}}}\AgdaSpace{}%
+\AgdaBound{M†}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}%
+\>[487I]\AgdaBound{M}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{—→}}\AgdaSpace{}%
+\AgdaBound{N}\<%
+\\
+\>[.][@{}l@{}]\<[487I]%
+\>[4]\AgdaComment{---------}\<%
+\\
+%
+\>[2]\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaDatatype{Leg}%
+\>[9]\AgdaBound{M†}\AgdaSpace{}%
+\AgdaBound{N}\<%
+\\
+\>[0]\AgdaFunction{sim}\AgdaSpace{}%
+\AgdaInductiveConstructor{\textasciitilde{}`}%
+\>[20]\AgdaSymbol{()}\<%
+\\
+\>[0]\AgdaFunction{sim}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaInductiveConstructor{\textasciitilde{}ƛ}}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}N}\AgdaSymbol{)}%
+\>[20]\AgdaSymbol{()}\<%
+\\
+\>[0]\AgdaFunction{sim}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{\textasciitilde{}L}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{\textasciitilde{}·}}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}M}\AgdaSymbol{)}%
+\>[20]\AgdaSymbol{(}\AgdaInductiveConstructor{ξ-·₁}\AgdaSpace{}%
+\AgdaBound{L—→}\AgdaSymbol{)}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaKeyword{with}\AgdaSpace{}%
+\AgdaFunction{sim}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}L}\AgdaSpace{}%
+\AgdaBound{L—→}\<%
+\\
+\>[0]\AgdaSymbol{...}%
+\>[5]\AgdaSymbol{|}\AgdaSpace{}%
+\AgdaInductiveConstructor{leg}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}L′}\AgdaSpace{}%
+\AgdaBound{L†—→}%
+\>[36]\AgdaSymbol{=}%
+\>[39]\AgdaInductiveConstructor{leg}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{\textasciitilde{}L′}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{\textasciitilde{}·}}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}M}\AgdaSymbol{)}%
+\>[57]\AgdaSymbol{(}\AgdaInductiveConstructor{ξ-·₁}\AgdaSpace{}%
+\AgdaBound{L†—→}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{sim}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{\textasciitilde{}V}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{\textasciitilde{}·}}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}M}\AgdaSymbol{)}%
+\>[20]\AgdaSymbol{(}\AgdaInductiveConstructor{ξ-·₂}\AgdaSpace{}%
+\AgdaBound{VV}\AgdaSpace{}%
+\AgdaBound{M—→}\AgdaSymbol{)}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaKeyword{with}\AgdaSpace{}%
+\AgdaFunction{sim}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}M}\AgdaSpace{}%
+\AgdaBound{M—→}\<%
+\\
+\>[0]\AgdaSymbol{...}%
+\>[5]\AgdaSymbol{|}\AgdaSpace{}%
+\AgdaInductiveConstructor{leg}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}M′}\AgdaSpace{}%
+\AgdaBound{M†—→}%
+\>[36]\AgdaSymbol{=}%
+\>[39]\AgdaInductiveConstructor{leg}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{\textasciitilde{}V}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{\textasciitilde{}·}}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}M′}\AgdaSymbol{)}%
+\>[57]\AgdaSymbol{(}\AgdaInductiveConstructor{ξ-·₂}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{\textasciitilde{}val}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}V}\AgdaSpace{}%
+\AgdaBound{VV}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaBound{M†—→}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{sim}\AgdaSpace{}%
+\AgdaSymbol{((}\AgdaOperator{\AgdaInductiveConstructor{\textasciitilde{}ƛ}}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}N}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaInductiveConstructor{\textasciitilde{}·}}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}V}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{β-ƛ}\AgdaSpace{}%
+\AgdaBound{VV}\AgdaSymbol{)}%
+\>[36]\AgdaSymbol{=}%
+\>[39]\AgdaInductiveConstructor{leg}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{\textasciitilde{}sub}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}N}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}V}\AgdaSymbol{)}%
+\>[57]\AgdaSymbol{(}\AgdaInductiveConstructor{β-ƛ}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{\textasciitilde{}val}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}V}\AgdaSpace{}%
+\AgdaBound{VV}\AgdaSymbol{))}\<%
+\\
+\>[0]\AgdaFunction{sim}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{\textasciitilde{}let}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}M}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}N}\AgdaSymbol{)}%
+\>[20]\AgdaSymbol{(}\AgdaInductiveConstructor{ξ-let}\AgdaSpace{}%
+\AgdaBound{M—→}\AgdaSymbol{)}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaKeyword{with}\AgdaSpace{}%
+\AgdaFunction{sim}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}M}\AgdaSpace{}%
+\AgdaBound{M—→}\<%
+\\
+\>[0]\AgdaSymbol{...}%
+\>[5]\AgdaSymbol{|}\AgdaSpace{}%
+\AgdaInductiveConstructor{leg}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}M′}\AgdaSpace{}%
+\AgdaBound{M†—→}%
+\>[36]\AgdaSymbol{=}%
+\>[39]\AgdaInductiveConstructor{leg}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{\textasciitilde{}let}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}M′}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}N}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{ξ-·₂}\AgdaSpace{}%
+\AgdaInductiveConstructor{V-ƛ}\AgdaSpace{}%
+\AgdaBound{M†—→}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{sim}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{\textasciitilde{}let}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}V}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}N}\AgdaSymbol{)}%
+\>[20]\AgdaSymbol{(}\AgdaInductiveConstructor{β-let}\AgdaSpace{}%
+\AgdaBound{VV}\AgdaSymbol{)}%
+\>[36]\AgdaSymbol{=}%
+\>[39]\AgdaInductiveConstructor{leg}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{\textasciitilde{}sub}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}N}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}V}\AgdaSymbol{)}%
+\>[57]\AgdaSymbol{(}\AgdaInductiveConstructor{β-ƛ}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{\textasciitilde{}val}\AgdaSpace{}%
+\AgdaBound{\textasciitilde{}V}\AgdaSpace{}%
+\AgdaBound{VV}\AgdaSymbol{))}\<%
+\end{code}
+\end{fence}
+
+The proof is by case analysis, examining each possible instance of
+\texttt{M\ \textasciitilde{}\ M†} and each possible instance of
+\texttt{M\ —→\ M†}, using recursive invocation whenever the reduction is
+by a \texttt{ξ} rule, and hence contains another reduction. In its
+structure, it looks a little bit like a proof of progress:
+
+\begin{itemize}
+\item
+  If the related terms are variables, no reduction applies.
+\item
+  If the related terms are abstractions, no reduction applies.
+\item
+  If the related terms are applications, there are three subcases:
+
+  \begin{itemize}
+  \item
+    The source term reduces via \texttt{ξ-·₁}, in which case the target
+    term does as well. Recursive invocation gives us
+
+    \begin{myDisplay}
+    L  --- —→ ---  L′
+    |              |
+    |              |
+    ~              ~
+    |              |
+    |              |
+    L† --- —→ --- L′†
+    \end{myDisplay}
+
+    from which follows:
+
+    \begin{myDisplay}
+     L · M  --- —→ ---  L′ · M
+       |                   |
+       |                   |
+       ~                   ~
+       |                   |
+       |                   |
+    L† · M† --- —→ --- L′† · M†
+    \end{myDisplay}
+  \item
+    The source term reduces via \texttt{ξ-·₂}, in which case the target
+    term does as well. Recursive invocation gives us
+
+    \begin{myDisplay}
+    M  --- —→ ---  M′
+    |              |
+    |              |
+    ~              ~
+    |              |
+    |              |
+    M† --- —→ --- M′†
+    \end{myDisplay}
+
+    from which follows:
+
+    \begin{myDisplay}
+     V · M  --- —→ ---  V · M′
+       |                  |
+       |                  |
+       ~                  ~
+       |                  |
+       |                  |
+    V† · M† --- —→ --- V† · M′†
+    \end{myDisplay}
+
+    Since simulation commutes with values and \texttt{V} is a value,
+    \texttt{V†} is also a value.
+  \item
+    The source term reduces via \texttt{β-ƛ}, in which case the target
+    term does as well:
+
+    \begin{myDisplay}
+     (ƛ x ⇒ N) · V  --- —→ ---  N [ x := V ]
+          |                           |
+          |                           |
+          ~                           ~
+          |                           |
+          |                           |
+    (ƛ x ⇒ N†) · V† --- —→ --- N† [ x :=  V† ]
+    \end{myDisplay}
+
+    Since simulation commutes with values and \texttt{V} is a value,
+    \texttt{V†} is also a value. Since simulation commutes with
+    substitution and \texttt{N\ \textasciitilde{}\ N†} and
+    \texttt{V\ \textasciitilde{}\ V†}, we have
+    \texttt{N\ {[}\ x\ :=\ V\ {]}\ \textasciitilde{}\ N†\ {[}\ x\ :=\ V†\ {]}}.
+  \end{itemize}
+\item
+  If the related terms are a let and an application of an abstraction,
+  there are two subcases:
+
+  \begin{itemize}
+  \item
+    The source term reduces via \texttt{ξ-let}, in which case the target
+    term reduces via \texttt{ξ-·₂}. Recursive invocation gives us
+
+    \begin{myDisplay}
+    M  --- —→ ---  M′
+    |              |
+    |              |
+    ~              ~
+    |              |
+    |              |
+    M† --- —→ --- M′†
+    \end{myDisplay}
+
+    from which follows:
+
+    \begin{myDisplay}
+    let x = M in N --- —→ --- let x = M′ in N
+          |                         |
+          |                         |
+          ~                         ~
+          |                         |
+          |                         |
+    (ƛ x ⇒ N) · M  --- —→ --- (ƛ x ⇒ N) · M′
+    \end{myDisplay}
+  \item
+    The source term reduces via \texttt{β-let}, in which case the target
+    term reduces via \texttt{β-ƛ}:
+
+    \begin{myDisplay}
+    let x = V in N  --- —→ ---  N [ x := V ]
+          |                         |
+          |                         |
+          ~                         ~
+          |                         |
+          |                         |
+    (ƛ x ⇒ N†) · V† --- —→ --- N† [ x := V† ]
+    \end{myDisplay}
+
+    Since simulation commutes with values and \texttt{V} is a value,
+    \texttt{V†} is also a value. Since simulation commutes with
+    substitution and \texttt{N\ \textasciitilde{}\ N†} and
+    \texttt{V\ \textasciitilde{}\ V†}, we have
+    \texttt{N\ {[}\ x\ :=\ V\ {]}\ \textasciitilde{}\ N†\ {[}\ x\ :=\ V†\ {]}}.
+  \end{itemize}
+\end{itemize}
+
+\hypertarget{exercise-simuxb9-practice}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{sim⁻¹}
+(practice)}{Exercise sim⁻¹ (practice)}}\label{exercise-simuxb9-practice}}
+
+Show that we also have a simulation in the other direction, and hence
+that we have a bisimulation.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- Your code goes here}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{exercise-products-practice}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{products}
+(practice)}{Exercise products (practice)}}\label{exercise-products-practice}}
+
+Show that the two formulations of products in Chapter
+\protect\hyperlink{More}{More} are in bisimulation. The only constructs
+you need to include are variables, and those connected to functions and
+products. In this case, the simulation is \emph{not} lock-step.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- Your code goes here}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{unicode}{%
+\section{Unicode}\label{unicode}}
+
+This chapter uses the following unicode:
+
+\begin{myDisplay}
+†  U+2020  DAGGER (\dag)
+⁻  U+207B  SUPERSCRIPT MINUS (\^-)
+¹  U+00B9  SUPERSCRIPT ONE (\^1)
+\end{myDisplay}
+

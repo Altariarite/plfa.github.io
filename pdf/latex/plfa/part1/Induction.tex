@@ -1,0 +1,2109 @@
+\hypertarget{Induction}{%
+\chapter{Induction: Proof by Induction}\label{Induction}}
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{module}\AgdaSpace{}%
+\AgdaModule{plfa.part1.Induction}\AgdaSpace{}%
+\AgdaKeyword{where}\<%
+\end{code}
+\end{fence}
+
+\begin{quote}
+Induction makes you feel guilty for getting something out of nothing
+\ldots{} but it is one of the greatest ideas of civilization. -- Herbert
+Wilf
+\end{quote}
+
+Now that we've defined the naturals and operations upon them, our next
+step is to learn how to prove properties that they satisfy. As hinted by
+their name, properties of \emph{inductive datatypes} are proved by
+\emph{induction}.
+
+\hypertarget{imports}{%
+\section{Imports}\label{imports}}
+
+We require equality as in the previous chapter, plus the naturals and
+some operations upon them. We also import a couple of new operations,
+\texttt{cong}, \texttt{sym}, and \texttt{\_≡⟨\_⟩\_}, which are explained
+below:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{Relation.Binary.PropositionalEquality}\AgdaSpace{}%
+\AgdaSymbol{as}\AgdaSpace{}%
+\AgdaModule{Eq}\<%
+\\
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaModule{Eq}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaDatatype{\AgdaUnderscore{}≡\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaFunction{cong}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaFunction{sym}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaModule{Eq.≡-Reasoning}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaOperator{\AgdaFunction{begin\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{\AgdaUnderscore{}≡⟨⟩\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaFunction{step-≡}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaOperator{\AgdaFunction{\AgdaUnderscore{}∎}}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaKeyword{open}\AgdaSpace{}%
+\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{Data.Nat}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaDatatype{ℕ}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{\AgdaUnderscore{}+\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{\AgdaUnderscore{}*\AgdaUnderscore{}}}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{\AgdaUnderscore{}∸\AgdaUnderscore{}}}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{properties-of-operators}{%
+\section{Properties of operators}\label{properties-of-operators}}
+
+Operators pop up all the time, and mathematicians have agreed on names
+for some of the most common properties.
+
+\begin{itemize}
+\item
+  \emph{Identity}. Operator \texttt{+} has left identity \texttt{0} if
+  \texttt{0\ +\ n\ ≡\ n}, and right identity \texttt{0} if
+  \texttt{n\ +\ 0\ ≡\ n}, for all \texttt{n}. A value that is both a
+  left and right identity is just called an identity. Identity is also
+  sometimes called \emph{unit}.
+\item
+  \emph{Associativity}. Operator \texttt{+} is associative if the
+  location of parentheses does not matter:
+  \texttt{(m\ +\ n)\ +\ p\ ≡\ m\ +\ (n\ +\ p)}, for all \texttt{m},
+  \texttt{n}, and \texttt{p}.
+\item
+  \emph{Commutativity}. Operator \texttt{+} is commutative if order of
+  arguments does not matter: \texttt{m\ +\ n\ ≡\ n\ +\ m}, for all
+  \texttt{m} and \texttt{n}.
+\item
+  \emph{Distributivity}. Operator \texttt{*} distributes over operator
+  \texttt{+} from the left if
+  \texttt{(m\ +\ n)\ *\ p\ ≡\ (m\ *\ p)\ +\ (n\ *\ p)}, for all
+  \texttt{m}, \texttt{n}, and \texttt{p}, and from the right if
+  \texttt{m\ *\ (p\ +\ q)\ ≡\ (m\ *\ p)\ +\ (m\ *\ q)}, for all
+  \texttt{m}, \texttt{p}, and \texttt{q}.
+\end{itemize}
+
+Addition has identity \texttt{0} and multiplication has identity
+\texttt{1}; addition and multiplication are both associative and
+commutative; and multiplication distributes over addition.
+
+If you ever bump into an operator at a party, you now know how to make
+small talk, by asking whether it has a unit and is associative or
+commutative. If you bump into two operators, you might ask them if one
+distributes over the other.
+
+Less frivolously, if you ever bump into an operator while reading a
+technical paper, this gives you a way to orient yourself, by checking
+whether or not it has an identity, is associative or commutative, or
+distributes over another operator. A careful author will often call out
+these properties---or their lack---for instance by pointing out that a
+newly introduced operator is associative but not commutative.
+
+\hypertarget{Induction-operators}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{operators}
+(practice)}{Exercise operators (practice)}}\label{Induction-operators}}
+
+Give another example of a pair of operators that have an identity and
+are associative, commutative, and distribute over one another. (You do
+not have to prove these properties.)
+
+Give an example of an operator that has an identity and is associative
+but is not commutative. (You do not have to prove these properties.)
+
+\hypertarget{associativity}{%
+\section{Associativity}\label{associativity}}
+
+One property of addition is that it is \emph{associative}, that is, that
+the location of the parentheses does not matter:
+
+\begin{myDisplay}
+(m + n) + p ≡ m + (n + p)
+\end{myDisplay}
+
+Here \texttt{m}, \texttt{n}, and \texttt{p} are variables that range
+over all natural numbers.
+
+We can test the proposition by choosing specific numbers for the three
+variables:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{\AgdaUnderscore{}}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaNumber{3}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaNumber{4}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaNumber{5}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaNumber{3}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaNumber{4}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaNumber{5}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaSymbol{\AgdaUnderscore{}}%
+\>[38I]\AgdaSymbol{=}\<%
+\\
+\>[.][@{}l@{}]\<[38I]%
+\>[2]\AgdaOperator{\AgdaFunction{begin}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{(}\AgdaNumber{3}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaNumber{4}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaNumber{5}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaNumber{7}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaNumber{5}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaNumber{12}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaNumber{3}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaNumber{9}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaNumber{3}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaNumber{4}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaNumber{5}\AgdaSymbol{)}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{∎}}\<%
+\end{code}
+\end{fence}
+
+Here we have displayed the computation as a chain of equations, one term
+to a line. It is often easiest to read such chains from the top down
+until one reaches the simplest term (in this case, \texttt{12}), and
+then from the bottom up until one reaches the same term.
+
+The test reveals that associativity is perhaps not as obvious as first
+it appears. Why should \texttt{7\ +\ 5} be the same as \texttt{3\ +\ 9}?
+We might want to gather more evidence, testing the proposition by
+choosing other numbers. But---since there are an infinite number of
+naturals---testing can never be complete. Is there any way we can be
+sure that associativity holds for \emph{all} the natural numbers?
+
+The answer is yes! We can prove a property holds for all naturals using
+\emph{proof by induction}.
+
+\hypertarget{proof-by-induction}{%
+\section{Proof by induction}\label{proof-by-induction}}
+
+Recall the definition of natural numbers consists of a \emph{base case}
+which tells us that \texttt{zero} is a natural, and an \emph{inductive
+case} which tells us that if \texttt{m} is a natural then
+\texttt{suc\ m} is also a natural.
+
+Proof by induction follows the structure of this definition. To prove a
+property of natural numbers by induction, we need to prove two cases.
+First is the \emph{base case}, where we show the property holds for
+\texttt{zero}. Second is the \emph{inductive case}, where we assume the
+property holds for an arbitrary natural \texttt{m} (we call this the
+\emph{inductive hypothesis}), and then show that the property must also
+hold for \texttt{suc\ m}.
+
+If we write \texttt{P\ m} for a property of \texttt{m}, then what we
+need to demonstrate are the following two inference rules:
+
+\begin{myDisplay}
+------
+P zero
+
+P m
+---------
+P (suc m)
+\end{myDisplay}
+
+Let's unpack these rules. The first rule is the base case, and requires
+we show that property \texttt{P} holds for \texttt{zero}. The second
+rule is the inductive case, and requires we show that if we assume the
+inductive hypothesis---namely that \texttt{P} holds for
+\texttt{m}---then it follows that \texttt{P} also holds for
+\texttt{suc\ m}.
+
+Why does this work? Again, it can be explained by a creation story. To
+start with, we know no properties:
+
+\begin{myDisplay}
+-- In the beginning, no properties are known.
+\end{myDisplay}
+
+Now, we apply the two rules to all the properties we know about. The
+base case tells us that \texttt{P\ zero} holds, so we add it to the set
+of known properties. The inductive case tells us that if \texttt{P\ m}
+holds (on the day before today) then \texttt{P\ (suc\ m)} also holds
+(today). We didn't know about any properties before today, so the
+inductive case doesn't apply:
+
+\begin{myDisplay}
+-- On the first day, one property is known.
+P zero
+\end{myDisplay}
+
+Then we repeat the process, so on the next day we know about all the
+properties from the day before, plus any properties added by the rules.
+The base case tells us that \texttt{P\ zero} holds, but we already knew
+that. But now the inductive case tells us that since \texttt{P\ zero}
+held yesterday, then \texttt{P\ (suc\ zero)} holds today:
+
+\begin{myDisplay}
+-- On the second day, two properties are known.
+P zero
+P (suc zero)
+\end{myDisplay}
+
+And we repeat the process again. Now the inductive case tells us that
+since \texttt{P\ zero} and \texttt{P\ (suc\ zero)} both hold, then
+\texttt{P\ (suc\ zero)} and \texttt{P\ (suc\ (suc\ zero))} also hold. We
+already knew about the first of these, but the second is new:
+
+\begin{myDisplay}
+-- On the third day, three properties are known.
+P zero
+P (suc zero)
+P (suc (suc zero))
+\end{myDisplay}
+
+You've got the hang of it by now:
+
+\begin{myDisplay}
+-- On the fourth day, four properties are known.
+P zero
+P (suc zero)
+P (suc (suc zero))
+P (suc (suc (suc zero)))
+\end{myDisplay}
+
+The process continues. On the \emph{n}'th day there will be \emph{n}
+distinct properties that hold. The property of every natural number will
+appear on some given day. In particular, the property \texttt{P\ n}
+first appears on day \emph{n+1}.
+
+\hypertarget{our-first-proof-associativity}{%
+\section{Our first proof:
+associativity}\label{our-first-proof-associativity}}
+
+To prove associativity, we take \texttt{P\ m} to be the property:
+
+\begin{myDisplay}
+(m + n) + p ≡ m + (n + p)
+\end{myDisplay}
+
+Here \texttt{n} and \texttt{p} are arbitrary natural numbers, so if we
+can show the equation holds for all \texttt{m} it will also hold for all
+\texttt{n} and \texttt{p}. The appropriate instances of the inference
+rules are:
+
+\begin{myDisplay}
+-------------------------------
+(zero + n) + p ≡ zero + (n + p)
+
+(m + n) + p ≡ m + (n + p)
+---------------------------------
+(suc m + n) + p ≡ suc m + (n + p)
+\end{myDisplay}
+
+If we can demonstrate both of these, then associativity of addition
+follows by induction.
+
+Here is the proposition's statement and proof:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{+-assoc}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{+-assoc}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaOperator{\AgdaFunction{begin}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{(}\AgdaInductiveConstructor{zero}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{zero}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{∎}}\<%
+\\
+\>[0]\AgdaFunction{+-assoc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaOperator{\AgdaFunction{begin}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{(}\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{((}\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\<%
+\\
+%
+\>[2]\AgdaFunction{≡⟨}\AgdaSpace{}%
+\AgdaFunction{cong}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{+-assoc}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaFunction{⟩}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{))}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{∎}}\<%
+\end{code}
+\end{fence}
+
+We have named the proof \texttt{+-assoc}. In Agda, identifiers can
+consist of any sequence of characters not including spaces or the
+characters \texttt{@.()\{\};\_}.
+
+Let's unpack this code. The signature states that we are defining the
+identifier \texttt{+-assoc} which provides evidence for the proposition:
+
+\begin{myDisplay}
+∀ (m n p : ℕ) → (m + n) + p ≡ m + (n + p)
+\end{myDisplay}
+
+The upside down A is pronounced ``for all'', and the proposition asserts
+that for all natural numbers \texttt{m}, \texttt{n}, and \texttt{p} the
+equation \texttt{(m\ +\ n)\ +\ p\ ≡\ m\ +\ (n\ +\ p)} holds. Evidence
+for the proposition is a function that accepts three natural numbers,
+binds them to \texttt{m}, \texttt{n}, and \texttt{p}, and returns
+evidence for the corresponding instance of the equation.
+
+For the base case, we must show:
+
+\begin{myDisplay}
+(zero + n) + p ≡ zero + (n + p)
+\end{myDisplay}
+
+Simplifying both sides with the base case of addition yields the
+equation:
+
+\begin{myDisplay}
+n + p ≡ n + p
+\end{myDisplay}
+
+This holds trivially. Reading the chain of equations in the base case of
+the proof, the top and bottom of the chain match the two sides of the
+equation to be shown, and reading down from the top and up from the
+bottom takes us to \texttt{n\ +\ p} in the middle. No justification
+other than simplification is required.
+
+For the inductive case, we must show:
+
+\begin{myDisplay}
+(suc m + n) + p ≡ suc m + (n + p)
+\end{myDisplay}
+
+Simplifying both sides with the inductive case of addition yields the
+equation:
+
+\begin{myDisplay}
+suc ((m + n) + p) ≡ suc (m + (n + p))
+\end{myDisplay}
+
+This in turn follows by prefacing \texttt{suc} to both sides of the
+induction hypothesis:
+
+\begin{myDisplay}
+(m + n) + p ≡ m + (n + p)
+\end{myDisplay}
+
+Reading the chain of equations in the inductive case of the proof, the
+top and bottom of the chain match the two sides of the equation to be
+shown, and reading down from the top and up from the bottom takes us to
+the simplified equation above. The remaining equation does not follow
+from simplification alone, so we use an additional operator for chain
+reasoning, \texttt{\_≡⟨\_⟩\_}, where a justification for the equation
+appears within angle brackets. The justification given is:
+
+\begin{myDisplay}
+⟨ cong suc (+-assoc m n p) ⟩
+\end{myDisplay}
+
+Here, the recursive invocation \texttt{+-assoc\ m\ n\ p} has as its type
+the induction hypothesis, and \texttt{cong\ suc} prefaces \texttt{suc}
+to each side to yield the needed equation.
+
+A relation is said to be a \emph{congruence} for a given function if it
+is preserved by applying that function. If \texttt{e} is evidence that
+\texttt{x\ ≡\ y}, then \texttt{cong\ f\ e} is evidence that
+\texttt{f\ x\ ≡\ f\ y}, for any function \texttt{f}.
+
+Here the inductive hypothesis is not assumed, but instead proved by a
+recursive invocation of the function we are defining,
+\texttt{+-assoc\ m\ n\ p}. As with addition, this is well founded
+because associativity of larger numbers is proved in terms of
+associativity of smaller numbers. In this case,
+\texttt{assoc\ (suc\ m)\ n\ p} is proved using \texttt{assoc\ m\ n\ p}.
+The correspondence between proof by induction and definition by
+recursion is one of the most appealing aspects of Agda.
+
+\hypertarget{induction-as-recursion}{%
+\section{Induction as recursion}\label{induction-as-recursion}}
+
+As a concrete example of how induction corresponds to recursion, here is
+the computation that occurs when instantiating \texttt{m} to \texttt{2}
+in the proof of associativity.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{+-assoc-2}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaNumber{2}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaNumber{2}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{+-assoc-2}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaOperator{\AgdaFunction{begin}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{(}\AgdaNumber{2}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaNumber{1}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{((}\AgdaNumber{1}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\<%
+\\
+%
+\>[2]\AgdaFunction{≡⟨}\AgdaSpace{}%
+\AgdaFunction{cong}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{+-assoc-1}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaFunction{⟩}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaNumber{1}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{))}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaNumber{2}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{∎}}\<%
+\\
+%
+\>[2]\AgdaKeyword{where}\<%
+\\
+%
+\>[2]\AgdaFunction{+-assoc-1}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaNumber{1}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaNumber{1}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\<%
+\\
+%
+\>[2]\AgdaFunction{+-assoc-1}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaOperator{\AgdaFunction{begin}}\<%
+\\
+\>[4][@{}l@{\AgdaIndent{0}}]%
+\>[6]\AgdaSymbol{(}\AgdaNumber{1}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\<%
+\\
+%
+\>[4]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[4][@{}l@{\AgdaIndent{0}}]%
+\>[6]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaNumber{0}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\<%
+\\
+%
+\>[4]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[4][@{}l@{\AgdaIndent{0}}]%
+\>[6]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{((}\AgdaNumber{0}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\<%
+\\
+%
+\>[4]\AgdaFunction{≡⟨}\AgdaSpace{}%
+\AgdaFunction{cong}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{+-assoc-0}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaFunction{⟩}\<%
+\\
+\>[4][@{}l@{\AgdaIndent{0}}]%
+\>[6]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaNumber{0}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{))}\<%
+\\
+%
+\>[4]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[4][@{}l@{\AgdaIndent{0}}]%
+\>[6]\AgdaNumber{1}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\<%
+\\
+%
+\>[4]\AgdaOperator{\AgdaFunction{∎}}\<%
+\\
+%
+\>[4]\AgdaKeyword{where}\<%
+\\
+%
+\>[4]\AgdaFunction{+-assoc-0}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaNumber{0}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaNumber{0}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\<%
+\\
+%
+\>[4]\AgdaFunction{+-assoc-0}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[4][@{}l@{\AgdaIndent{0}}]%
+\>[6]\AgdaOperator{\AgdaFunction{begin}}\<%
+\\
+\>[6][@{}l@{\AgdaIndent{0}}]%
+\>[8]\AgdaSymbol{(}\AgdaNumber{0}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\<%
+\\
+%
+\>[6]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[6][@{}l@{\AgdaIndent{0}}]%
+\>[8]\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\<%
+\\
+%
+\>[6]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[6][@{}l@{\AgdaIndent{0}}]%
+\>[8]\AgdaNumber{0}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\<%
+\\
+%
+\>[6]\AgdaOperator{\AgdaFunction{∎}}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{terminology-and-notation}{%
+\section{Terminology and notation}\label{terminology-and-notation}}
+
+The symbol \texttt{∀} appears in the statement of associativity to
+indicate that it holds for all numbers \texttt{m}, \texttt{n}, and
+\texttt{p}. We refer to \texttt{∀} as the \emph{universal quantifier},
+and it is discussed further in Chapter
+\protect\hyperlink{Quantifiers}{Quantifiers}.
+
+Evidence for a universal quantifier is a function. The notations
+
+\begin{myDisplay}
++-assoc : ∀ (m n p : ℕ) → (m + n) + p ≡ m + (n + p)
+\end{myDisplay}
+
+and
+
+\begin{myDisplay}
++-assoc : ∀ (m : ℕ) → ∀ (n : ℕ) → ∀ (p : ℕ) → (m + n) + p ≡ m + (n + p)
+\end{myDisplay}
+
+are equivalent. They differ from a function type such as
+\texttt{ℕ\ →\ ℕ\ →\ ℕ} in that variables are associated with each
+argument type, and the result type may mention (or depend upon) these
+variables; hence they are called \emph{dependent functions}.
+
+\hypertarget{our-second-proof-commutativity}{%
+\section{Our second proof:
+commutativity}\label{our-second-proof-commutativity}}
+
+Another important property of addition is that it is \emph{commutative},
+that is, that the order of the operands does not matter:
+
+\begin{myDisplay}
+m + n ≡ n + m
+\end{myDisplay}
+
+The proof requires that we first demonstrate two lemmas.
+
+\hypertarget{the-first-lemma}{%
+\subsection{The first lemma}\label{the-first-lemma}}
+
+The base case of the definition of addition states that zero is a
+left-identity:
+
+\begin{myDisplay}
+zero + n ≡ n
+\end{myDisplay}
+
+Our first lemma states that zero is also a right-identity:
+
+\begin{myDisplay}
+m + zero ≡ m
+\end{myDisplay}
+
+Here is the lemma's statement and proof:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{+-identityʳ}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{m}\<%
+\\
+\>[0]\AgdaFunction{+-identityʳ}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaOperator{\AgdaFunction{begin}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{zero}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{zero}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{∎}}\<%
+\\
+\>[0]\AgdaFunction{+-identityʳ}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaOperator{\AgdaFunction{begin}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}\AgdaSymbol{)}\<%
+\\
+%
+\>[2]\AgdaFunction{≡⟨}\AgdaSpace{}%
+\AgdaFunction{cong}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{+-identityʳ}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaFunction{⟩}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{m}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{∎}}\<%
+\end{code}
+\end{fence}
+
+The signature states that we are defining the identifier
+\texttt{+-identityʳ} which provides evidence for the proposition:
+
+\begin{myDisplay}
+∀ (m : ℕ) → m + zero ≡ m
+\end{myDisplay}
+
+Evidence for the proposition is a function that accepts a natural
+number, binds it to \texttt{m}, and returns evidence for the
+corresponding instance of the equation. The proof is by induction on
+\texttt{m}.
+
+For the base case, we must show:
+
+\begin{myDisplay}
+zero + zero ≡ zero
+\end{myDisplay}
+
+Simplifying with the base case of addition, this is straightforward.
+
+For the inductive case, we must show:
+
+\begin{myDisplay}
+(suc m) + zero = suc m
+\end{myDisplay}
+
+Simplifying both sides with the inductive case of addition yields the
+equation:
+
+\begin{myDisplay}
+suc (m + zero) = suc m
+\end{myDisplay}
+
+This in turn follows by prefacing \texttt{suc} to both sides of the
+induction hypothesis:
+
+\begin{myDisplay}
+m + zero ≡ m
+\end{myDisplay}
+
+Reading the chain of equations down from the top and up from the bottom
+takes us to the simplified equation above. The remaining equation has
+the justification:
+
+\begin{myDisplay}
+⟨ cong suc (+-identityʳ m) ⟩
+\end{myDisplay}
+
+Here, the recursive invocation \texttt{+-identityʳ\ m} has as its type
+the induction hypothesis, and \texttt{cong\ suc} prefaces \texttt{suc}
+to each side to yield the needed equation. This completes the first
+lemma.
+
+\hypertarget{the-second-lemma}{%
+\subsection{The second lemma}\label{the-second-lemma}}
+
+The inductive case of the definition of addition pushes \texttt{suc} on
+the first argument to the outside:
+
+\begin{myDisplay}
+suc m + n ≡ suc (m + n)
+\end{myDisplay}
+
+Our second lemma does the same for \texttt{suc} on the second argument:
+
+\begin{myDisplay}
+m + suc n ≡ suc (m + n)
+\end{myDisplay}
+
+Here is the lemma's statement and proof:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{+-suc}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{+-suc}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaOperator{\AgdaFunction{begin}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{zero}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{n}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{n}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{zero}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{∎}}\<%
+\\
+\>[0]\AgdaFunction{+-suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaOperator{\AgdaFunction{begin}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{n}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\<%
+\\
+%
+\>[2]\AgdaFunction{≡⟨}\AgdaSpace{}%
+\AgdaFunction{cong}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{+-suc}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaFunction{⟩}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{))}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{∎}}\<%
+\end{code}
+\end{fence}
+
+The signature states that we are defining the identifier \texttt{+-suc}
+which provides evidence for the proposition:
+
+\begin{myDisplay}
+∀ (m n : ℕ) → m + suc n ≡ suc (m + n)
+\end{myDisplay}
+
+Evidence for the proposition is a function that accepts two natural
+numbers, binds them to \texttt{m} and \texttt{n}, and returns evidence
+for the corresponding instance of the equation. The proof is by
+induction on \texttt{m}.
+
+For the base case, we must show:
+
+\begin{myDisplay}
+zero + suc n ≡ suc (zero + n)
+\end{myDisplay}
+
+Simplifying with the base case of addition, this is straightforward.
+
+For the inductive case, we must show:
+
+\begin{myDisplay}
+suc m + suc n ≡ suc (suc m + n)
+\end{myDisplay}
+
+Simplifying both sides with the inductive case of addition yields the
+equation:
+
+\begin{myDisplay}
+suc (m + suc n) ≡ suc (suc (m + n))
+\end{myDisplay}
+
+This in turn follows by prefacing \texttt{suc} to both sides of the
+induction hypothesis:
+
+\begin{myDisplay}
+m + suc n ≡ suc (m + n)
+\end{myDisplay}
+
+Reading the chain of equations down from the top and up from the bottom
+takes us to the simplified equation in the middle. The remaining
+equation has the justification:
+
+\begin{myDisplay}
+⟨ cong suc (+-suc m n) ⟩
+\end{myDisplay}
+
+Here, the recursive invocation \texttt{+-suc\ m\ n} has as its type the
+induction hypothesis, and \texttt{cong\ suc} prefaces \texttt{suc} to
+each side to yield the needed equation. This completes the second lemma.
+
+\hypertarget{the-proposition}{%
+\subsection{The proposition}\label{the-proposition}}
+
+Finally, here is our proposition's statement and proof:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{+-comm}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{m}\<%
+\\
+\>[0]\AgdaFunction{+-comm}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaOperator{\AgdaFunction{begin}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}\<%
+\\
+%
+\>[2]\AgdaFunction{≡⟨}\AgdaSpace{}%
+\AgdaFunction{+-identityʳ}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaFunction{⟩}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaBound{m}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{zero}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{m}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{∎}}\<%
+\\
+\>[0]\AgdaFunction{+-comm}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaOperator{\AgdaFunction{begin}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{n}\<%
+\\
+%
+\>[2]\AgdaFunction{≡⟨}\AgdaSpace{}%
+\AgdaFunction{+-suc}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaFunction{⟩}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\<%
+\\
+%
+\>[2]\AgdaFunction{≡⟨}\AgdaSpace{}%
+\AgdaFunction{cong}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{+-comm}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaFunction{⟩}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSymbol{)}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{≡⟨⟩}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{m}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{∎}}\<%
+\end{code}
+\end{fence}
+
+The first line states that we are defining the identifier
+\texttt{+-comm} which provides evidence for the proposition:
+
+\begin{myDisplay}
+∀ (m n : ℕ) → m + n ≡ n + m
+\end{myDisplay}
+
+Evidence for the proposition is a function that accepts two natural
+numbers, binds them to \texttt{m} and \texttt{n}, and returns evidence
+for the corresponding instance of the equation. The proof is by
+induction on \texttt{n}. (Not on \texttt{m} this time!)
+
+For the base case, we must show:
+
+\begin{myDisplay}
+m + zero ≡ zero + m
+\end{myDisplay}
+
+Simplifying both sides with the base case of addition yields the
+equation:
+
+\begin{myDisplay}
+m + zero ≡ m
+\end{myDisplay}
+
+The remaining equation has the justification
+\texttt{⟨\ +-identityʳ\ m\ ⟩}, which invokes the first lemma.
+
+For the inductive case, we must show:
+
+\begin{myDisplay}
+m + suc n ≡ suc n + m
+\end{myDisplay}
+
+Simplifying both sides with the inductive case of addition yields the
+equation:
+
+\begin{myDisplay}
+m + suc n ≡ suc (n + m)
+\end{myDisplay}
+
+We show this in two steps. First, we have:
+
+\begin{myDisplay}
+m + suc n ≡ suc (m + n)
+\end{myDisplay}
+
+which is justified by the second lemma, \texttt{⟨\ +-suc\ m\ n\ ⟩}. Then
+we have
+
+\begin{myDisplay}
+suc (m + n) ≡ suc (n + m)
+\end{myDisplay}
+
+which is justified by congruence and the induction hypothesis,
+\texttt{⟨\ cong\ suc\ (+-comm\ m\ n)\ ⟩}. This completes the proof.
+
+Agda requires that identifiers are defined before they are used, so we
+must present the lemmas before the main proposition, as we have done
+above. In practice, one will often attempt to prove the main proposition
+first, and the equations required to do so will suggest what lemmas to
+prove.
+
+\hypertarget{Induction-sections}{%
+\section{Our first corollary: rearranging}\label{Induction-sections}}
+
+We can apply associativity to rearrange parentheses however we like.
+Here is an example:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{+-rearrange}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSpace{}%
+\AgdaBound{q}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{p}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{q}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{q}\<%
+\\
+\>[0]\AgdaFunction{+-rearrange}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSpace{}%
+\AgdaBound{q}\AgdaSpace{}%
+\AgdaSymbol{=}\<%
+\\
+\>[0][@{}l@{\AgdaIndent{0}}]%
+\>[2]\AgdaOperator{\AgdaFunction{begin}}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{p}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{q}\AgdaSymbol{)}\<%
+\\
+%
+\>[2]\AgdaFunction{≡⟨}\AgdaSpace{}%
+\AgdaFunction{+-assoc}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{p}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{q}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaFunction{⟩}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{p}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{q}\AgdaSymbol{))}\<%
+\\
+%
+\>[2]\AgdaFunction{≡⟨}\AgdaSpace{}%
+\AgdaFunction{cong}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+\AgdaUnderscore{}}}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{sym}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{+-assoc}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSpace{}%
+\AgdaBound{q}\AgdaSymbol{))}\AgdaSpace{}%
+\AgdaFunction{⟩}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaSymbol{((}\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{q}\AgdaSymbol{)}\<%
+\\
+%
+\>[2]\AgdaFunction{≡⟨}\AgdaSpace{}%
+\AgdaFunction{sym}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{+-assoc}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaBound{q}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaFunction{⟩}\<%
+\\
+\>[2][@{}l@{\AgdaIndent{0}}]%
+\>[4]\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{))}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{q}\<%
+\\
+%
+\>[2]\AgdaOperator{\AgdaFunction{∎}}\<%
+\end{code}
+\end{fence}
+
+No induction is required, we simply apply associativity twice. A few
+points are worthy of note.
+
+First, addition associates to the left, so
+\texttt{m\ +\ (n\ +\ p)\ +\ q} stands for
+\texttt{(m\ +\ (n\ +\ p))\ +\ q}.
+
+Second, we use \texttt{sym} to interchange the sides of an equation.
+Proposition \texttt{+-assoc\ n\ p\ q} shifts parentheses from right to
+left:
+
+\begin{myDisplay}
+(n + p) + q ≡ n + (p + q)
+\end{myDisplay}
+
+To shift them the other way, we use \texttt{sym\ (+-assoc\ n\ p\ q)}:
+
+\begin{myDisplay}
+n + (p + q) ≡ (n + p) + q
+\end{myDisplay}
+
+In general, if \texttt{e} provides evidence for \texttt{x\ ≡\ y} then
+\texttt{sym\ e} provides evidence for \texttt{y\ ≡\ x}.
+
+Third, Agda supports a variant of the \emph{section} notation introduced
+by Richard Bird. We write \texttt{(x\ +\_)} for the function that
+applied to \texttt{y} returns \texttt{x\ +\ y}. Thus, applying the
+congruence \texttt{cong\ (m\ +\_)} takes the above equation into:
+
+\begin{myDisplay}
+m + (n + (p + q)) ≡ m + ((n + p) + q)
+\end{myDisplay}
+
+Similarly, we write \texttt{(\_+\ x)} for the function that applied to
+\texttt{y} returns \texttt{y\ +\ x}; the same works for any infix
+operator.
+
+\hypertarget{creation-one-last-time}{%
+\section{Creation, one last time}\label{creation-one-last-time}}
+
+Returning to the proof of associativity, it may be helpful to view the
+inductive proof (or, equivalently, the recursive definition) as a
+creation story. This time we are concerned with judgments asserting
+associativity:
+
+\begin{myDisplay}
+ -- In the beginning, we know nothing about associativity.
+\end{myDisplay}
+
+Now, we apply the rules to all the judgments we know about. The base
+case tells us that \texttt{(zero\ +\ n)\ +\ p\ ≡\ zero\ +\ (n\ +\ p)}
+for every natural \texttt{n} and \texttt{p}. The inductive case tells us
+that if \texttt{(m\ +\ n)\ +\ p\ ≡\ m\ +\ (n\ +\ p)} (on the day before
+today) then \texttt{(suc\ m\ +\ n)\ +\ p\ ≡\ suc\ m\ +\ (n\ +\ p)}
+(today). We didn't know any judgments about associativity before today,
+so that rule doesn't give us any new judgments:
+
+\begin{myDisplay}
+-- On the first day, we know about associativity of 0.
+(0 + 0) + 0 ≡ 0 + (0 + 0)   ...   (0 + 4) + 5 ≡ 0 + (4 + 5)   ...
+\end{myDisplay}
+
+Then we repeat the process, so on the next day we know about all the
+judgments from the day before, plus any judgments added by the rules.
+The base case tells us nothing new, but now the inductive case adds more
+judgments:
+
+\begin{myDisplay}
+-- On the second day, we know about associativity of 0 and 1.
+(0 + 0) + 0 ≡ 0 + (0 + 0)   ...   (0 + 4) + 5 ≡ 0 + (4 + 5)   ...
+(1 + 0) + 0 ≡ 1 + (0 + 0)   ...   (1 + 4) + 5 ≡ 1 + (4 + 5)   ...
+\end{myDisplay}
+
+And we repeat the process again:
+
+\begin{myDisplay}
+-- On the third day, we know about associativity of 0, 1, and 2.
+(0 + 0) + 0 ≡ 0 + (0 + 0)   ...   (0 + 4) + 5 ≡ 0 + (4 + 5)   ...
+(1 + 0) + 0 ≡ 1 + (0 + 0)   ...   (1 + 4) + 5 ≡ 1 + (4 + 5)   ...
+(2 + 0) + 0 ≡ 2 + (0 + 0)   ...   (2 + 4) + 5 ≡ 2 + (4 + 5)   ...
+\end{myDisplay}
+
+You've got the hang of it by now:
+
+\begin{myDisplay}
+-- On the fourth day, we know about associativity of 0, 1, 2, and 3.
+(0 + 0) + 0 ≡ 0 + (0 + 0)   ...   (0 + 4) + 5 ≡ 0 + (4 + 5)   ...
+(1 + 0) + 0 ≡ 1 + (0 + 0)   ...   (1 + 4) + 5 ≡ 1 + (4 + 5)   ...
+(2 + 0) + 0 ≡ 2 + (0 + 0)   ...   (2 + 4) + 5 ≡ 2 + (4 + 5)   ...
+(3 + 0) + 0 ≡ 3 + (0 + 0)   ...   (3 + 4) + 5 ≡ 3 + (4 + 5)   ...
+\end{myDisplay}
+
+The process continues. On the \emph{m}'th day we will know all the
+judgments where the first number is less than \emph{m}.
+
+There is also a completely finite approach to generating the same
+equations, which is left as an exercise for the reader.
+
+\hypertarget{Induction-finite-plus-assoc}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{finite-\textbar{}-assoc}
+(stretch)}{Exercise finite-\textbar-assoc (stretch)}}\label{Induction-finite-plus-assoc}}
+
+Write out what is known about associativity of addition on each of the
+first four days using a finite story of creation, as
+\protect\hyperlink{Naturals-finite-creation}{earlier}.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- Your code goes here}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{associativity-with-rewrite}{%
+\section{Associativity with rewrite}\label{associativity-with-rewrite}}
+
+There is more than one way to skin a cat. Here is a second proof of
+associativity of addition in Agda, using \texttt{rewrite} rather than
+chains of equations:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{+-assoc′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{p}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{+-assoc′}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}%
+\>[17]\AgdaBound{n}\AgdaSpace{}%
+\AgdaBound{p}%
+\>[46]\AgdaSymbol{=}%
+\>[49]\AgdaInductiveConstructor{refl}\<%
+\\
+\>[0]\AgdaFunction{+-assoc′}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaBound{p}%
+\>[22]\AgdaKeyword{rewrite}\AgdaSpace{}%
+\AgdaFunction{+-assoc′}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaBound{p}%
+\>[46]\AgdaSymbol{=}%
+\>[49]\AgdaInductiveConstructor{refl}\<%
+\end{code}
+\end{fence}
+
+For the base case, we must show:
+
+\begin{myDisplay}
+(zero + n) + p ≡ zero + (n + p)
+\end{myDisplay}
+
+Simplifying both sides with the base case of addition yields the
+equation:
+
+\begin{myDisplay}
+n + p ≡ n + p
+\end{myDisplay}
+
+This holds trivially. The proof that a term is equal to itself is
+written \texttt{refl}.
+
+For the inductive case, we must show:
+
+\begin{myDisplay}
+(suc m + n) + p ≡ suc m + (n + p)
+\end{myDisplay}
+
+Simplifying both sides with the inductive case of addition yields the
+equation:
+
+\begin{myDisplay}
+suc ((m + n) + p) ≡ suc (m + (n + p))
+\end{myDisplay}
+
+After rewriting with the inductive hypothesis these two terms are equal,
+and the proof is again given by \texttt{refl}. Rewriting by a given
+equation is indicated by the keyword \texttt{rewrite} followed by a
+proof of that equation. Rewriting avoids not only chains of equations
+but also the need to invoke \texttt{cong}.
+
+\hypertarget{commutativity-with-rewrite}{%
+\section{Commutativity with rewrite}\label{commutativity-with-rewrite}}
+
+Here is a second proof of commutativity of addition, using
+\texttt{rewrite} rather than chains of equations:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaFunction{+-identity′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{n}\<%
+\\
+\>[0]\AgdaFunction{+-identity′}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\<%
+\\
+\>[0]\AgdaFunction{+-identity′}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaKeyword{rewrite}\AgdaSpace{}%
+\AgdaFunction{+-identity′}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0]\AgdaFunction{+-suc′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\<%
+\\
+\>[0]\AgdaFunction{+-suc′}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\<%
+\\
+\>[0]\AgdaFunction{+-suc′}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaKeyword{rewrite}\AgdaSpace{}%
+\AgdaFunction{+-suc′}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\<%
+\\
+%
+\\[\AgdaEmptyExtraSkip]%
+\>[0]\AgdaFunction{+-comm′}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaSymbol{∀}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{:}\AgdaSpace{}%
+\AgdaDatatype{ℕ}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaSymbol{→}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaDatatype{≡}}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaOperator{\AgdaPrimitive{+}}\AgdaSpace{}%
+\AgdaBound{m}\<%
+\\
+\>[0]\AgdaFunction{+-comm′}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaInductiveConstructor{zero}\AgdaSpace{}%
+\AgdaKeyword{rewrite}\AgdaSpace{}%
+\AgdaFunction{+-identity′}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\<%
+\\
+\>[0]\AgdaFunction{+-comm′}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaInductiveConstructor{suc}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSymbol{)}\AgdaSpace{}%
+\AgdaKeyword{rewrite}\AgdaSpace{}%
+\AgdaFunction{+-suc′}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{|}\AgdaSpace{}%
+\AgdaFunction{+-comm′}\AgdaSpace{}%
+\AgdaBound{m}\AgdaSpace{}%
+\AgdaBound{n}\AgdaSpace{}%
+\AgdaSymbol{=}\AgdaSpace{}%
+\AgdaInductiveConstructor{refl}\<%
+\end{code}
+\end{fence}
+
+In the final line, rewriting with two equations is indicated by
+separating the two proofs of the relevant equations by a vertical bar;
+the rewrite on the left is performed before that on the right.
+
+\hypertarget{building-proofs-interactively}{%
+\section{Building proofs
+interactively}\label{building-proofs-interactively}}
+
+It is instructive to see how to build the alternative proof of
+associativity using the interactive features of Agda in Emacs. Begin by
+typing:
+
+\begin{myDisplay}
++-assoc′ : ∀ (m n p : ℕ) → (m + n) + p ≡ m + (n + p)
++-assoc′ m n p = ?
+\end{myDisplay}
+
+The question mark indicates that you would like Agda to help with
+filling in that part of the code. If you type \texttt{C-c\ C-l}
+(control-c followed by control-l), the question mark will be replaced:
+
+\begin{myDisplay}
++-assoc′ : ∀ (m n p : ℕ) → (m + n) + p ≡ m + (n + p)
++-assoc′ m n p = { }0
+\end{myDisplay}
+
+The empty braces are called a \emph{hole}, and 0 is a number used for
+referring to the hole. The hole may display highlighted in green. Emacs
+will also create a new window at the bottom of the screen displaying the
+text:
+
+\begin{myDisplay}
+?0 : ((m + n) + p) ≡ (m + (n + p))
+\end{myDisplay}
+
+This indicates that hole 0 is to be filled in with a proof of the stated
+judgment.
+
+We wish to prove the proposition by induction on \texttt{m}. Move the
+cursor into the hole and type \texttt{C-c\ C-c}. You will be given the
+prompt:
+
+\begin{myDisplay}
+pattern variables to case (empty for split on result):
+\end{myDisplay}
+
+Typing \texttt{m} will cause a split on that variable, resulting in an
+update to the code:
+
+\begin{myDisplay}
++-assoc′ : ∀ (m n p : ℕ) → (m + n) + p ≡ m + (n + p)
++-assoc′ zero n p = { }0
++-assoc′ (suc m) n p = { }1
+\end{myDisplay}
+
+There are now two holes, and the window at the bottom tells you what
+each is required to prove:
+
+\begin{myDisplay}
+?0 : ((zero + n) + p) ≡ (zero + (n + p))
+?1 : ((suc m + n) + p) ≡ (suc m + (n + p))
+\end{myDisplay}
+
+Going into hole 0 and typing \texttt{C-c\ C-,} will display the text:
+
+\begin{myDisplay}
+Goal: (n + p) ≡ (n + p)
+————————————————————————————————————————————————————————————
+p : ℕ
+n : ℕ
+\end{myDisplay}
+
+This indicates that after simplification the goal for hole 0 is as
+stated, and that variables \texttt{p} and \texttt{n} of the stated types
+are available to use in the proof. The proof of the given goal is
+trivial, and going into the goal and typing \texttt{C-c\ C-r} will fill
+it in. Typing \texttt{C-c\ C-l} renumbers the remaining hole to 0:
+
+\begin{myDisplay}
++-assoc′ : ∀ (m n p : ℕ) → (m + n) + p ≡ m + (n + p)
++-assoc′ zero n p = refl
++-assoc′ (suc m) n p = { }0
+\end{myDisplay}
+
+Going into the new hole 0 and typing \texttt{C-c\ C-,} will display the
+text:
+
+\begin{myDisplay}
+Goal: suc ((m + n) + p) ≡ suc (m + (n + p))
+————————————————————————————————————————————————————————————
+p : ℕ
+n : ℕ
+m : ℕ
+\end{myDisplay}
+
+Again, this gives the simplified goal and the available variables. In
+this case, we need to rewrite by the induction hypothesis, so let's edit
+the text accordingly:
+
+\begin{myDisplay}
++-assoc′ : ∀ (m n p : ℕ) → (m + n) + p ≡ m + (n + p)
++-assoc′ zero n p = refl
++-assoc′ (suc m) n p rewrite +-assoc′ m n p = { }0
+\end{myDisplay}
+
+Going into the remaining hole and typing \texttt{C-c\ C-,} will display
+the text:
+
+\begin{myDisplay}
+Goal: suc (m + (n + p)) ≡ suc (m + (n + p))
+————————————————————————————————————————————————————————————
+p : ℕ
+n : ℕ
+m : ℕ
+\end{myDisplay}
+
+The proof of the given goal is trivial, and going into the goal and
+typing \texttt{C-c\ C-r} will fill it in, completing the proof:
+
+\begin{myDisplay}
++-assoc′ : ∀ (m n p : ℕ) → (m + n) + p ≡ m + (n + p)
++-assoc′ zero n p = refl
++-assoc′ (suc m) n p rewrite +-assoc′ m n p = refl
+\end{myDisplay}
+
+\hypertarget{Induction-plus-swap}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{+-swap}
+(recommended)}{Exercise +-swap (recommended)}}\label{Induction-plus-swap}}
+
+Show
+
+\begin{myDisplay}
+m + (n + p) ≡ n + (m + p)
+\end{myDisplay}
+
+for all naturals \texttt{m}, \texttt{n}, and \texttt{p}. No induction is
+needed, just apply the previous results which show addition is
+associative and commutative.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- Your code goes here}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{Induction-times-distrib-plus}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{*-distrib-+}
+(recommended)}{Exercise *-distrib-+ (recommended)}}\label{Induction-times-distrib-plus}}
+
+Show multiplication distributes over addition, that is,
+
+\begin{myDisplay}
+(m + n) * p ≡ m * p + n * p
+\end{myDisplay}
+
+for all naturals \texttt{m}, \texttt{n}, and \texttt{p}.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- Your code goes here}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{Induction-times-assoc}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{*-assoc}
+(recommended)}{Exercise *-assoc (recommended)}}\label{Induction-times-assoc}}
+
+Show multiplication is associative, that is,
+
+\begin{myDisplay}
+(m * n) * p ≡ m * (n * p)
+\end{myDisplay}
+
+for all naturals \texttt{m}, \texttt{n}, and \texttt{p}.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- Your code goes here}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{Induction-times-comm}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{*-comm}
+(practice)}{Exercise *-comm (practice)}}\label{Induction-times-comm}}
+
+Show multiplication is commutative, that is,
+
+\begin{myDisplay}
+m * n ≡ n * m
+\end{myDisplay}
+
+for all naturals \texttt{m} and \texttt{n}. As with commutativity of
+addition, you will need to formulate and prove suitable lemmas.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- Your code goes here}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{Induction-zero-monus}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{0∸n≡0}
+(practice)}{Exercise 0∸n≡0 (practice)}}\label{Induction-zero-monus}}
+
+Show
+
+\begin{myDisplay}
+zero ∸ n ≡ zero
+\end{myDisplay}
+
+for all naturals \texttt{n}. Did your proof require induction?
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- Your code goes here}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{Induction-monus-plus-assoc}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{∸-\textbar{}-assoc}
+(practice)}{Exercise ∸-\textbar-assoc (practice)}}\label{Induction-monus-plus-assoc}}
+
+Show that monus associates with addition, that is,
+
+\begin{myDisplay}
+m ∸ n ∸ p ≡ m ∸ (n + p)
+\end{myDisplay}
+
+for all naturals \texttt{m}, \texttt{n}, and \texttt{p}.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- Your code goes here}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{exercise-stretch}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{+*\^{}}
+(stretch)}{Exercise +*\^{} (stretch)}}\label{exercise-stretch}}
+
+Show the following three laws
+
+\begin{myDisplay}
+ m ^ (n + p) ≡ (m ^ n) * (m ^ p)  (^-distribˡ-|-*)
+ (m * n) ^ p ≡ (m ^ p) * (n ^ p)  (^-distribʳ-*)
+ (m ^ n) ^ p ≡ m ^ (n * p)        (^-*-assoc)
+\end{myDisplay}
+
+for all \texttt{m}, \texttt{n}, and \texttt{p}.
+
+\hypertarget{Induction-Bin-laws}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{Bin-laws}
+(stretch)}{Exercise Bin-laws (stretch)}}\label{Induction-Bin-laws}}
+
+Recall that Exercise \protect\hyperlink{Naturals-Bin}{Bin} defines a
+datatype \texttt{Bin} of bitstrings representing natural numbers, and
+asks you to define functions
+
+\begin{myDisplay}
+inc   : Bin → Bin
+to    : ℕ → Bin
+from  : Bin → ℕ
+\end{myDisplay}
+
+Consider the following laws, where \texttt{n} ranges over naturals and
+\texttt{b} over bitstrings:
+
+\begin{myDisplay}
+from (inc b) ≡ suc (from b)
+to (from b) ≡ b
+from (to n) ≡ n
+\end{myDisplay}
+
+For each law: if it holds, prove; if not, give a counterexample.
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaComment{-- Your code goes here}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{standard-library}{%
+\section{Standard library}\label{standard-library}}
+
+Definitions similar to those in this chapter can be found in the
+standard library:
+
+\begin{fence}
+\begin{code}%
+\>[0]\AgdaKeyword{import}\AgdaSpace{}%
+\AgdaModule{Data.Nat.Properties}\AgdaSpace{}%
+\AgdaKeyword{using}\AgdaSpace{}%
+\AgdaSymbol{(}\AgdaFunction{+-assoc}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaFunction{+-identityʳ}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaFunction{+-suc}\AgdaSymbol{;}\AgdaSpace{}%
+\AgdaFunction{+-comm}\AgdaSymbol{)}\<%
+\end{code}
+\end{fence}
+
+\hypertarget{unicode}{%
+\section{Unicode}\label{unicode}}
+
+This chapter uses the following unicode:
+
+\begin{myDisplay}
+∀  U+2200  FOR ALL (\forall, \all)
+ʳ  U+02B3  MODIFIER LETTER SMALL R (\^r)
+′  U+2032  PRIME (\')
+″  U+2033  DOUBLE PRIME (\')
+‴  U+2034  TRIPLE PRIME (\')
+⁗  U+2057  QUADRUPLE PRIME (\')
+\end{myDisplay}
+
+Similar to \texttt{\textbackslash{}r}, the command
+\texttt{\textbackslash{}\^{}r} gives access to a variety of superscript
+rightward arrows, and also a superscript letter \texttt{r}. The command
+\texttt{\textbackslash{}\textquotesingle{}} gives access to a range of
+primes (\texttt{′\ ″\ ‴\ ⁗}).
+

@@ -1,0 +1,734 @@
+\hypertarget{Confluence}{%
+\chapter{Confluence: Confluence of untyped lambda
+calculus}\label{Confluence}}
+
+\begin{fence}
+\begin{code}
+module plfa.part2.Confluence where
+\end{code}
+\end{fence}
+
+\hypertarget{introduction}{%
+\section{Introduction}\label{introduction}}
+
+In this chapter we prove that beta reduction is \emph{confluent}, a
+property also known as \emph{Church-Rosser}. That is, if there are
+reduction sequences from any term \texttt{L} to two different terms
+\texttt{M₁} and \texttt{M₂}, then there exist reduction sequences from
+those two terms to some common term \texttt{N}. In pictures:
+
+\begin{myDisplay}
+    L
+   / \
+  /   \
+ /     \
+M₁      M₂
+ \     /
+  \   /
+   \ /
+    N
+\end{myDisplay}
+
+where downward lines are instances of \texttt{—↠}.
+
+Confluence is studied in many other kinds of rewrite systems besides the
+lambda calculus, and it is well known how to prove confluence in rewrite
+systems that enjoy the \emph{diamond property}, a single-step version of
+confluence. Let \texttt{⇛} be a relation. Then \texttt{⇛} has the
+diamond property if whenever \texttt{L\ ⇛\ M₁} and \texttt{L\ ⇛\ M₂},
+then there exists an \texttt{N} such that \texttt{M₁\ ⇛\ N} and
+\texttt{M₂\ ⇛\ N}. This is just an instance of the same picture above,
+where downward lines are now instance of \texttt{⇛}. If we write
+\texttt{⇛*} for the reflexive and transitive closure of \texttt{⇛}, then
+confluence of \texttt{⇛*} follows immediately from the diamond property.
+
+Unfortunately, reduction in the lambda calculus does not satisfy the
+diamond property. Here is a counter example.
+
+\begin{myDisplay}
+(λ x. x x)((λ x. x) a) —→ (λ x. x x) a
+(λ x. x x)((λ x. x) a) —→ ((λ x. x) a) ((λ x. x) a)
+\end{myDisplay}
+
+Both terms can reduce to \texttt{a\ a}, but the second term requires two
+steps to get there, not one.
+
+To side-step this problem, we'll define an auxiliary reduction relation,
+called \emph{parallel reduction}, that can perform many reductions
+simultaneously and thereby satisfy the diamond property. Furthermore, we
+show that a parallel reduction sequence exists between any two terms if
+and only if a beta reduction sequence exists between them. Thus, we can
+reduce the proof of confluence for beta reduction to confluence for
+parallel reduction.
+
+\hypertarget{imports}{%
+\section{Imports}\label{imports}}
+
+\begin{fence}
+\begin{code}
+open import Relation.Binary.PropositionalEquality using (_≡_; refl)
+open import Function using (_∘_)
+open import Data.Product using (_×_; Σ; Σ-syntax; ∃; ∃-syntax; proj₁; proj₂)
+  renaming (_,_ to ⟨_,_⟩)
+open import plfa.part2.Substitution using (Rename; Subst)
+open import plfa.part2.Untyped
+  using (_—→_; β; ξ₁; ξ₂; ζ; _—↠_; begin_; _—→⟨_⟩_; _—↠⟨_⟩_; _∎;
+  abs-cong; appL-cong; appR-cong; —↠-trans;
+  _⊢_; _∋_; `_; #_; _,_; ★; ƛ_; _·_; _[_];
+  rename; ext; exts; Z; S_; subst; subst-zero)
+\end{code}
+\end{fence}
+
+\hypertarget{parallel-reduction}{%
+\section{Parallel Reduction}\label{parallel-reduction}}
+
+The parallel reduction relation is defined as follows.
+
+\begin{fence}
+\begin{code}
+infix 2 _⇛_
+
+data _⇛_ : ∀ {Γ A} → (Γ ⊢ A) → (Γ ⊢ A) → Set where
+
+  pvar : ∀{Γ A}{x : Γ ∋ A}
+      ---------
+    → (` x) ⇛ (` x)
+
+  pabs : ∀{Γ}{N N′ : Γ , ★ ⊢ ★}
+    → N ⇛ N′
+      ----------
+    → ƛ N ⇛ ƛ N′
+
+  papp : ∀{Γ}{L L′ M M′ : Γ ⊢ ★}
+    → L ⇛ L′
+    → M ⇛ M′
+      -----------------
+    → L · M ⇛ L′ · M′
+
+  pbeta : ∀{Γ}{N N′  : Γ , ★ ⊢ ★}{M M′ : Γ ⊢ ★}
+    → N ⇛ N′
+    → M ⇛ M′
+      -----------------------
+    → (ƛ N) · M  ⇛  N′ [ M′ ]
+\end{code}
+\end{fence}
+
+The first three rules are congruences that reduce each of their parts
+simultaneously. The last rule reduces a lambda term and term in parallel
+followed by a beta step.
+
+We remark that the \texttt{pabs}, \texttt{papp}, and \texttt{pbeta}
+rules perform reduction on all their subexpressions simultaneously.
+Also, the \texttt{pabs} rule is akin to the \texttt{ζ} rule and
+\texttt{pbeta} is akin to \texttt{β}.
+
+Parallel reduction is reflexive.
+
+\begin{fence}
+\begin{code}
+par-refl : ∀{Γ A}{M : Γ ⊢ A} → M ⇛ M
+par-refl {Γ} {A} {` x} = pvar
+par-refl {Γ} {★} {ƛ N} = pabs par-refl
+par-refl {Γ} {★} {L · M} = papp par-refl par-refl
+\end{code}
+\end{fence}
+
+We define the sequences of parallel reduction as follows.
+
+\begin{fence}
+\begin{code}
+infix  2 _⇛*_
+infixr 2 _⇛⟨_⟩_
+infix  3 _∎
+
+data _⇛*_ : ∀ {Γ A} → (Γ ⊢ A) → (Γ ⊢ A) → Set where
+
+  _∎ : ∀ {Γ A} (M : Γ ⊢ A)
+      --------
+    → M ⇛* M
+
+  _⇛⟨_⟩_ : ∀ {Γ A} (L : Γ ⊢ A) {M N : Γ ⊢ A}
+    → L ⇛ M
+    → M ⇛* N
+      ---------
+    → L ⇛* N
+\end{code}
+\end{fence}
+
+\hypertarget{exercise-par-diamond-eg-practice}{%
+\subsubsection{\texorpdfstring{Exercise \texttt{par-diamond-eg}
+(practice)}{Exercise par-diamond-eg (practice)}}\label{exercise-par-diamond-eg-practice}}
+
+Revisit the counter example to the diamond property for reduction by
+showing that the diamond property holds for parallel reduction in that
+case.
+
+\begin{fence}
+\begin{code}
+-- Your code goes here
+\end{code}
+\end{fence}
+
+\hypertarget{equivalence-between-parallel-reduction-and-reduction}{%
+\section{Equivalence between parallel reduction and
+reduction}\label{equivalence-between-parallel-reduction-and-reduction}}
+
+Here we prove that for any \texttt{M} and \texttt{N}, \texttt{M\ ⇛*\ N}
+if and only if \texttt{M\ —↠\ N}. The only-if direction is particularly
+easy. We start by showing that if \texttt{M\ —→\ N}, then
+\texttt{M\ ⇛\ N}. The proof is by induction on the reduction
+\texttt{M\ —→\ N}.
+
+\begin{fence}
+\begin{code}
+beta-par : ∀{Γ A}{M N : Γ ⊢ A}
+  → M —→ N
+    ------
+  → M ⇛ N
+beta-par {Γ} {★} {L · M} (ξ₁ r) = papp (beta-par {M = L} r) par-refl
+beta-par {Γ} {★} {L · M} (ξ₂ r) = papp par-refl (beta-par {M = M} r)
+beta-par {Γ} {★} {(ƛ N) · M} β = pbeta par-refl par-refl
+beta-par {Γ} {★} {ƛ N} (ζ r) = pabs (beta-par r)
+\end{code}
+\end{fence}
+
+With this lemma in hand we complete the only-if direction, that
+\texttt{M\ —↠\ N} implies \texttt{M\ ⇛*\ N}. The proof is a
+straightforward induction on the reduction sequence \texttt{M\ —↠\ N}.
+
+\begin{fence}
+\begin{code}
+betas-pars : ∀{Γ A} {M N : Γ ⊢ A}
+  → M —↠ N
+    ------
+  → M ⇛* N
+betas-pars {Γ} {A} {M₁} {.M₁} (M₁ ∎) = M₁ ∎
+betas-pars {Γ} {A} {.L} {N} (L —→⟨ b ⟩ bs) =
+   L ⇛⟨ beta-par b ⟩ betas-pars bs
+\end{code}
+\end{fence}
+
+Now for the other direction, that \texttt{M\ ⇛*\ N} implies
+\texttt{M\ —↠\ N}. The proof of this direction is a bit different
+because it's not the case that \texttt{M\ ⇛\ N} implies
+\texttt{M\ —→\ N}. After all, \texttt{M\ ⇛\ N} performs many reductions.
+So instead we shall prove that \texttt{M\ ⇛\ N} implies
+\texttt{M\ —↠\ N}.
+
+\begin{fence}
+\begin{code}
+par-betas : ∀{Γ A}{M N : Γ ⊢ A}
+  → M ⇛ N
+    ------
+  → M —↠ N
+par-betas {Γ} {A} {.(` _)} (pvar{x = x}) = (` x) ∎
+par-betas {Γ} {★} {ƛ N} (pabs p) = abs-cong (par-betas p)
+par-betas {Γ} {★} {L · M} (papp {L = L}{L′}{M}{M′} p₁ p₂) =
+    begin
+    L · M   —↠⟨ appL-cong{M = M} (par-betas p₁) ⟩
+    L′ · M  —↠⟨ appR-cong (par-betas p₂) ⟩
+    L′ · M′
+    ∎
+par-betas {Γ} {★} {(ƛ N) · M} (pbeta{N′ = N′}{M′ = M′} p₁ p₂) =
+    begin
+    (ƛ N) · M                    —↠⟨ appL-cong{M = M} (abs-cong (par-betas p₁)) ⟩
+    (ƛ N′) · M                   —↠⟨ appR-cong{L = ƛ N′} (par-betas p₂)  ⟩
+    (ƛ N′) · M′                  —→⟨ β ⟩
+     N′ [ M′ ]
+    ∎
+\end{code}
+\end{fence}
+
+The proof is by induction on \texttt{M\ ⇛\ N}.
+
+\begin{itemize}
+\item
+  Suppose \texttt{x\ ⇛\ x}. We immediately have \texttt{x\ —↠\ x}.
+\item
+  Suppose \texttt{ƛ\ N\ ⇛\ ƛ\ N′} because \texttt{N\ ⇛\ N′}. By the
+  induction hypothesis we have \texttt{N\ —↠\ N′}. We conclude that
+  \texttt{ƛ\ N\ —↠\ ƛ\ N′} because \texttt{—↠} is a congruence.
+\item
+  Suppose \texttt{L\ ·\ M\ ⇛\ L′\ ·\ M′} because \texttt{L\ ⇛\ L′} and
+  \texttt{M\ ⇛\ M′}. By the induction hypothesis, we have
+  \texttt{L\ —↠\ L′} and \texttt{M\ —↠\ M′}. So
+  \texttt{L\ ·\ M\ —↠\ L′\ ·\ M} and then
+  \texttt{L′\ ·\ M\ \ —↠\ L′\ ·\ M′} because \texttt{—↠} is a
+  congruence.
+\item
+  Suppose \texttt{(ƛ\ N)\ ·\ M\ \ ⇛\ \ N′\ {[}\ M′\ {]}} because
+  \texttt{N\ ⇛\ N′} and \texttt{M\ ⇛\ M′}. By similar reasoning, we have
+  \texttt{(ƛ\ N)\ ·\ M\ —↠\ (ƛ\ N′)\ ·\ M′} which we can following with
+  the β reduction \texttt{(ƛ\ N′)\ ·\ M′\ —→\ N′\ {[}\ M′\ {]}}.
+\end{itemize}
+
+With this lemma in hand, we complete the proof that \texttt{M\ ⇛*\ N}
+implies \texttt{M\ —↠\ N} with a simple induction on \texttt{M\ ⇛*\ N}.
+
+\begin{fence}
+\begin{code}
+pars-betas : ∀{Γ A} {M N : Γ ⊢ A}
+  → M ⇛* N
+    ------
+  → M —↠ N
+pars-betas (M₁ ∎) = M₁ ∎
+pars-betas (L ⇛⟨ p ⟩ ps) = —↠-trans (par-betas p) (pars-betas ps)
+\end{code}
+\end{fence}
+
+\hypertarget{substitution-lemma-for-parallel-reduction}{%
+\section{Substitution lemma for parallel
+reduction}\label{substitution-lemma-for-parallel-reduction}}
+
+Our next goal is the prove the diamond property for parallel reduction.
+But to do that, we need to prove that substitution respects parallel
+reduction. That is, if \texttt{N\ ⇛\ N′} and \texttt{M\ ⇛\ M′}, then
+\texttt{N\ {[}\ M\ {]}\ ⇛\ N′\ {[}\ M′\ {]}}. We cannot prove this
+directly by induction, so we generalize it to: if \texttt{N\ ⇛\ N′} and
+the substitution \texttt{σ} pointwise parallel reduces to \texttt{τ},
+then \texttt{subst\ σ\ N\ ⇛\ subst\ τ\ N′}. We define the notion of
+pointwise parallel reduction as follows.
+
+\begin{fence}
+\begin{code}
+par-subst : ∀{Γ Δ} → Subst Γ Δ → Subst Γ Δ → Set
+par-subst {Γ}{Δ} σ σ′ = ∀{A}{x : Γ ∋ A} → σ x ⇛ σ′ x
+\end{code}
+\end{fence}
+
+Because substitution depends on the extension function \texttt{exts},
+which in turn relies on \texttt{rename}, we start with a version of the
+substitution lemma, called \texttt{par-rename}, that is specialized to
+renamings. The proof of \texttt{par-rename} relies on the fact that
+renaming and substitution commute with one another, which is a lemma
+that we import from Chapter
+\protect\hyperlink{Substitution}{Substitution} and restate here.
+
+\begin{fence}
+\begin{code}
+rename-subst-commute : ∀{Γ Δ}{N : Γ , ★ ⊢ ★}{M : Γ ⊢ ★}{ρ : Rename Γ Δ }
+    → (rename (ext ρ) N) [ rename ρ M ] ≡ rename ρ (N [ M ])
+rename-subst-commute {N = N} = plfa.part2.Substitution.rename-subst-commute {N = N}
+\end{code}
+\end{fence}
+
+Now for the \texttt{par-rename} lemma.
+
+\begin{fence}
+\begin{code}
+par-rename : ∀{Γ Δ A} {ρ : Rename Γ Δ} {M M′ : Γ ⊢ A}
+  → M ⇛ M′
+    ------------------------
+  → rename ρ M ⇛ rename ρ M′
+par-rename pvar = pvar
+par-rename (pabs p) = pabs (par-rename p)
+par-rename (papp p₁ p₂) = papp (par-rename p₁) (par-rename p₂)
+par-rename {Γ}{Δ}{A}{ρ} (pbeta{Γ}{N}{N′}{M}{M′} p₁ p₂)
+    with pbeta (par-rename{ρ = ext ρ} p₁) (par-rename{ρ = ρ} p₂)
+... | G rewrite rename-subst-commute{Γ}{Δ}{N′}{M′}{ρ} = G
+
+\end{code}
+\end{fence}
+
+The proof is by induction on \texttt{M\ ⇛\ M′}. The first four cases are
+straightforward so we just consider the last one for \texttt{pbeta}.
+
+\begin{itemize}
+\tightlist
+\item
+  Suppose \texttt{(ƛ\ N)\ ·\ M\ \ ⇛\ \ N′\ {[}\ M′\ {]}} because
+  \texttt{N\ ⇛\ N′} and \texttt{M\ ⇛\ M′}. By the induction hypothesis,
+  we have \texttt{rename\ (ext\ ρ)\ N\ ⇛\ rename\ (ext\ ρ)\ N′} and
+  \texttt{rename\ ρ\ M\ ⇛\ rename\ ρ\ M′}. So by \texttt{pbeta} we have
+  \texttt{(ƛ\ rename\ (ext\ ρ)\ N)\ ·\ (rename\ ρ\ M)\ ⇛\ (rename\ (ext\ ρ)\ N)\ {[}\ rename\ ρ\ M\ {]}}.
+  However, to conclude we instead need parallel reduction to
+  \texttt{rename\ ρ\ (N\ {[}\ M\ {]})}. But thankfully, renaming and
+  substitution commute with one another.
+\end{itemize}
+
+With the \texttt{par-rename} lemma in hand, it is straightforward to
+show that extending substitutions preserves the pointwise parallel
+reduction relation.
+
+\begin{fence}
+\begin{code}
+par-subst-exts : ∀{Γ Δ} {σ τ : Subst Γ Δ}
+  → par-subst σ τ
+    ------------------------------------------
+  → ∀{B} → par-subst (exts σ {B = B}) (exts τ)
+par-subst-exts s {x = Z} = pvar
+par-subst-exts s {x = S x} = par-rename s
+\end{code}
+\end{fence}
+
+The next lemma that we need for proving that substitution respects
+parallel reduction is the following which states that simultaneoous
+substitution commutes with single substitution. We import this lemma
+from Chapter \protect\hyperlink{Substitution}{Substitution} and restate
+it below.
+
+\begin{fence}
+\begin{code}
+subst-commute : ∀{Γ Δ}{N : Γ , ★ ⊢ ★}{M : Γ ⊢ ★}{σ : Subst Γ Δ }
+  → subst (exts σ) N [ subst σ M ] ≡ subst σ (N [ M ])
+subst-commute {N = N} = plfa.part2.Substitution.subst-commute {N = N}
+\end{code}
+\end{fence}
+
+We are ready to prove that substitution respects parallel reduction.
+
+\begin{fence}
+\begin{code}
+subst-par : ∀{Γ Δ A} {σ τ : Subst Γ Δ} {M M′ : Γ ⊢ A}
+  → par-subst σ τ  →  M ⇛ M′
+    --------------------------
+  → subst σ M ⇛ subst τ M′
+subst-par {Γ} {Δ} {A} {σ} {τ} {` x} s pvar = s
+subst-par {Γ} {Δ} {A} {σ} {τ} {ƛ N} s (pabs p) =
+  pabs (subst-par {σ = exts σ} {τ = exts τ}
+        (λ {A}{x} → par-subst-exts s {x = x}) p)
+subst-par {Γ} {Δ} {★} {σ} {τ} {L · M} s (papp p₁ p₂) =
+  papp (subst-par s p₁) (subst-par s p₂)
+subst-par {Γ} {Δ} {★} {σ} {τ} {(ƛ N) · M} s (pbeta{N′ = N′}{M′ = M′} p₁ p₂)
+    with pbeta (subst-par{σ = exts σ}{τ = exts τ}{M = N}
+                        (λ{A}{x} → par-subst-exts s {x = x}) p₁)
+               (subst-par {σ = σ} s p₂)
+... | G rewrite subst-commute{N = N′}{M = M′}{σ = τ} = G
+\end{code}
+\end{fence}
+
+We proceed by induction on \texttt{M\ ⇛\ M′}.
+
+\begin{itemize}
+\item
+  Suppose \texttt{x\ ⇛\ x}. We conclude that \texttt{σ\ x\ ⇛\ τ\ x}
+  using the premise \texttt{par-subst\ σ\ τ}.
+\item
+  Suppose \texttt{ƛ\ N\ ⇛\ ƛ\ N′} because \texttt{N\ ⇛\ N′}. To use the
+  induction hypothesis, we need
+  \texttt{par-subst\ (exts\ σ)\ (exts\ τ)}, which we obtain by
+  \texttt{par-subst-exts}. So we have
+  \texttt{subst\ (exts\ σ)\ N\ ⇛\ subst\ (exts\ τ)\ N′} and conclude by
+  rule \texttt{pabs}.
+\item
+  Suppose \texttt{L\ ·\ M\ ⇛\ L′\ ·\ M′} because \texttt{L\ ⇛\ L′} and
+  \texttt{M\ ⇛\ M′}. By the induction hypothesis we have
+  \texttt{subst\ σ\ L\ ⇛\ subst\ τ\ L′} and
+  \texttt{subst\ σ\ M\ ⇛\ subst\ τ\ M′}, so we conclude by rule
+  \texttt{papp}.
+\item
+  Suppose \texttt{(ƛ\ N)\ ·\ M\ \ ⇛\ \ N′\ {[}\ M′\ {]}} because
+  \texttt{N\ ⇛\ N′} and \texttt{M\ ⇛\ M′}. Again we obtain
+  \texttt{par-subst\ (exts\ σ)\ (exts\ τ)} by \texttt{par-subst-exts}.
+  So by the induction hypothesis, we have
+  \texttt{subst\ (exts\ σ)\ N\ ⇛\ subst\ (exts\ τ)\ N′} and
+  \texttt{subst\ σ\ M\ ⇛\ subst\ τ\ M′}. Then by rule \texttt{pbeta}, we
+  have parallel reduction to
+  \texttt{subst\ (exts\ τ)\ N′\ {[}\ subst\ τ\ M′\ {]}}. Substitution
+  commutes with itself in the following sense. For any σ, N, and M, we
+  have
+
+  \begin{myDisplay}
+    (subst (exts σ) N) [ subst σ M ] ≡ subst σ (N [ M ])
+  \end{myDisplay}
+
+  So we have parallel reduction to
+  \texttt{subst\ τ\ (N′\ {[}\ M′\ {]})}.
+\end{itemize}
+
+Of course, if \texttt{M\ ⇛\ M′}, then \texttt{subst-zero\ M} pointwise
+parallel reduces to \texttt{subst-zero\ M′}.
+
+\begin{fence}
+\begin{code}
+par-subst-zero : ∀{Γ}{A}{M M′ : Γ ⊢ A}
+       → M ⇛ M′
+       → par-subst (subst-zero M) (subst-zero M′)
+par-subst-zero {M} {M′} p {A} {Z} = p
+par-subst-zero {M} {M′} p {A} {S x} = pvar
+\end{code}
+\end{fence}
+
+We conclude this section with the desired corollary, that substitution
+respects parallel reduction.
+
+\begin{fence}
+\begin{code}
+sub-par : ∀{Γ A B} {N N′ : Γ , A ⊢ B} {M M′ : Γ ⊢ A}
+  → N ⇛ N′
+  → M ⇛ M′
+    --------------------------
+  → N [ M ] ⇛ N′ [ M′ ]
+sub-par pn pm = subst-par (par-subst-zero pm) pn
+\end{code}
+\end{fence}
+
+\hypertarget{parallel-reduction-satisfies-the-diamond-property}{%
+\section{Parallel reduction satisfies the diamond
+property}\label{parallel-reduction-satisfies-the-diamond-property}}
+
+The heart of the confluence proof is made of stone, or rather, of
+diamond! We show that parallel reduction satisfies the diamond property:
+that if \texttt{M\ ⇛\ N} and \texttt{M\ ⇛\ N′}, then \texttt{N\ ⇛\ L}
+and \texttt{N′\ ⇛\ L} for some \texttt{L}. The typical proof is an
+induction on \texttt{M\ ⇛\ N} and \texttt{M\ ⇛\ N′} so that every
+possible pair gives rise to a witness \texttt{L} given by performing
+enough beta reductions in parallel.
+
+However, a simpler approach is to perform as many beta reductions in
+parallel as possible on \texttt{M}, say \texttt{M\ ⁺}, and then show
+that \texttt{N} also parallel reduces to \texttt{M\ ⁺}. This is the idea
+of Takahashi's \emph{complete development}. The desired property may be
+illustrated as
+
+\begin{myDisplay}
+    M
+   /|
+  / |
+ /  |
+N   2
+ \  |
+  \ |
+   \|
+    M⁺
+\end{myDisplay}
+
+where downward lines are instances of \texttt{⇛}, so we call it the
+\emph{triangle property}.
+
+\begin{fence}
+\begin{code}
+_⁺ : ∀ {Γ A}
+  → Γ ⊢ A → Γ ⊢ A
+(` x) ⁺       =  ` x
+(ƛ M) ⁺       = ƛ (M ⁺)
+((ƛ N) · M) ⁺ = N ⁺ [ M ⁺ ]
+(L · M) ⁺     = L ⁺ · (M ⁺)
+
+par-triangle : ∀ {Γ A} {M N : Γ ⊢ A}
+  → M ⇛ N
+    -------
+  → N ⇛ M ⁺
+par-triangle pvar          = pvar
+par-triangle (pabs p)      = pabs (par-triangle p)
+par-triangle (pbeta p1 p2) = sub-par (par-triangle p1) (par-triangle p2)
+par-triangle (papp {L = ƛ _ } (pabs p1) p2) =
+  pbeta (par-triangle p1) (par-triangle p2)
+par-triangle (papp {L = ` _}   p1 p2) = papp (par-triangle p1) (par-triangle p2)
+par-triangle (papp {L = _ · _} p1 p2) = papp (par-triangle p1) (par-triangle p2)
+\end{code}
+\end{fence}
+
+The proof of the triangle property is an induction on \texttt{M\ ⇛\ N}.
+
+\begin{itemize}
+\item
+  Suppose \texttt{x\ ⇛\ x}. Clearly \texttt{x\ ⁺\ =\ x}, so
+  \texttt{x\ ⇛\ x}.
+\item
+  Suppose \texttt{ƛ\ M\ ⇛\ ƛ\ N}. By the induction hypothesis we have
+  \texttt{N\ ⇛\ M\ ⁺} and by definition
+  \texttt{(λ\ M)\ ⁺\ =\ λ\ (M\ ⁺)}, so we conclude that
+  \texttt{λ\ N\ ⇛\ λ\ \ \ (M\ ⁺)}.
+\item
+  Suppose \texttt{(λ\ N)\ ·\ M\ ⇛\ N′\ {[}\ M′\ {]}}. By the induction
+  hypothesis, we have \texttt{N′\ ⇛\ N\ ⁺} and \texttt{M′\ ⇛\ M\ ⁺}.
+  Since substitution respects parallel reduction, it follows that
+  \texttt{N′\ {[}\ M′\ {]}\ ⇛\ N\ ⁺\ {[}\ M\ ⁺\ {]}}, but the right hand
+  side is exactly \texttt{((λ\ N)\ ·\ M)\ ⁺}, hence
+  \texttt{N′\ {[}\ M′\ {]}\ ⇛\ ((λ\ N)\ ·\ M)\ ⁺}.
+\item
+  Suppose \texttt{(λ\ L)\ ·\ M\ ⇛\ (λ\ L′)\ ·\ M′}. By the induction
+  hypothesis we have \texttt{L′\ ⇛\ L\ ⁺} and \texttt{M′\ ⇛\ M\ ⁺}; by
+  definition \texttt{((λ\ L)\ ·\ M)\ ⁺\ =\ L\ ⁺\ {[}\ M\ ⁺\ {]}}. It
+  follows \texttt{(λ\ L′)\ ·\ M′\ ⇛\ L\ ⁺\ {[}\ M\ ⁺\ {]}}.
+\item
+  Suppose \texttt{x\ ·\ M\ ⇛\ x\ ·\ M′}. By the induction hypothesis we
+  have \texttt{M′\ ⇛\ M\ ⁺} and \texttt{x\ ⇛\ x\ ⁺} so that
+  \texttt{x\ ·\ M′\ ⇛\ x\ ·\ M\ ⁺}. The remaining case is proved in the
+  same way, so we ignore it. (As there is currently no way in Agda to
+  expand the catch-all pattern in the definition of \texttt{\_⁺} for us
+  before checking the right-hand side, we have to write down the
+  remaining case explicitly.)
+\end{itemize}
+
+The diamond property then follows by halving the diamond into two
+triangles.
+
+\begin{myDisplay}
+    M
+   /|\
+  / | \
+ /  |  \
+N   2   N′
+ \  |  /
+  \ | /
+   \|/
+    M⁺
+\end{myDisplay}
+
+That is, the diamond property is proved by applying the triangle
+property on each side with the same confluent term \texttt{M\ ⁺}.
+
+\begin{fence}
+\begin{code}
+par-diamond : ∀{Γ A} {M N N′ : Γ ⊢ A}
+  → M ⇛ N
+  → M ⇛ N′
+    ---------------------------------
+  → Σ[ L ∈ Γ ⊢ A ] (N ⇛ L) × (N′ ⇛ L)
+par-diamond {M = M} p1 p2 = ⟨ M ⁺ , ⟨ par-triangle p1 , par-triangle p2 ⟩ ⟩
+\end{code}
+\end{fence}
+
+This step is optional, though, in the presence of triangle property.
+
+\hypertarget{exercise-practice}{%
+\subsubsection{Exercise (practice)}\label{exercise-practice}}
+
+\begin{itemize}
+\item
+  Prove the diamond property \texttt{par-diamond} directly by induction
+  on \texttt{M\ ⇛\ N} and \texttt{M\ ⇛\ N′}.
+\item
+  Draw pictures that represent the proofs of each of the six cases in
+  the direct proof of \texttt{par-diamond}. The pictures should consist
+  of nodes and directed edges, where each node is labeled with a term
+  and each edge represents parallel reduction.
+\end{itemize}
+
+\hypertarget{proof-of-confluence-for-parallel-reduction}{%
+\section{Proof of confluence for parallel
+reduction}\label{proof-of-confluence-for-parallel-reduction}}
+
+As promised at the beginning, the proof that parallel reduction is
+confluent is easy now that we know it satisfies the triangle property.
+We just need to prove the strip lemma, which states that if
+\texttt{M\ ⇛\ N} and \texttt{M\ ⇛*\ N′}, then \texttt{N\ ⇛*\ L} and
+\texttt{N′\ ⇛\ L} for some \texttt{L}. The following diagram illustrates
+the strip lemma
+
+\begin{myDisplay}
+    M
+   / \
+  1   *
+ /     \
+N       N′
+ \     /
+  *   1
+   \ /
+    L
+\end{myDisplay}
+
+where downward lines are instances of \texttt{⇛} or \texttt{⇛*},
+depending on how they are marked.
+
+The proof of the strip lemma is a straightforward induction on
+\texttt{M\ ⇛*\ N′}, using the triangle property in the induction step.
+
+\begin{fence}
+\begin{code}
+strip : ∀{Γ A} {M N N′ : Γ ⊢ A}
+  → M ⇛ N
+  → M ⇛* N′
+    ------------------------------------
+  → Σ[ L ∈ Γ ⊢ A ] (N ⇛* L)  ×  (N′ ⇛ L)
+strip{Γ}{A}{M}{N}{N′} mn (M ∎) = ⟨ N , ⟨ N ∎ , mn ⟩ ⟩
+strip{Γ}{A}{M}{N}{N′} mn (M ⇛⟨ mm' ⟩ m'n')
+  with strip (par-triangle mm') m'n'
+... | ⟨ L , ⟨ ll' , n'l' ⟩ ⟩ = ⟨ L , ⟨ N ⇛⟨ par-triangle mn ⟩ ll' , n'l' ⟩ ⟩
+\end{code}
+\end{fence}
+
+The proof of confluence for parallel reduction is now proved by
+induction on the sequence \texttt{M\ ⇛*\ N}, using the above lemma in
+the induction step.
+
+\begin{fence}
+\begin{code}
+par-confluence : ∀{Γ A} {L M₁ M₂ : Γ ⊢ A}
+  → L ⇛* M₁
+  → L ⇛* M₂
+    ------------------------------------
+  → Σ[ N ∈ Γ ⊢ A ] (M₁ ⇛* N) × (M₂ ⇛* N)
+par-confluence {Γ}{A}{L}{.L}{N} (L ∎) L⇛*N = ⟨ N , ⟨ L⇛*N , N ∎ ⟩ ⟩
+par-confluence {Γ}{A}{L}{M₁′}{M₂} (L ⇛⟨ L⇛M₁ ⟩ M₁⇛*M₁′) L⇛*M₂
+    with strip L⇛M₁ L⇛*M₂
+... | ⟨ N , ⟨ M₁⇛*N , M₂⇛N ⟩ ⟩
+      with par-confluence M₁⇛*M₁′ M₁⇛*N
+...   | ⟨ N′ , ⟨ M₁′⇛*N′ , N⇛*N′ ⟩ ⟩ =
+        ⟨ N′ , ⟨ M₁′⇛*N′ , (M₂ ⇛⟨ M₂⇛N ⟩ N⇛*N′) ⟩ ⟩
+\end{code}
+\end{fence}
+
+The step case may be illustrated as follows:
+
+\begin{myDisplay}
+        L
+       / \
+      1   *
+     /     \
+    M₁ (a)  M₂
+   / \     /
+  *   *   1
+ /     \ /
+M₁′(b)  N
+ \     /
+  *   *
+   \ /
+    N′
+\end{myDisplay}
+
+where downward lines are instances of \texttt{⇛} or \texttt{⇛*},
+depending on how they are marked. Here \texttt{(a)} holds by
+\texttt{strip} and \texttt{(b)} holds by induction.
+
+\hypertarget{proof-of-confluence-for-reduction}{%
+\section{Proof of confluence for
+reduction}\label{proof-of-confluence-for-reduction}}
+
+Confluence of reduction is a corollary of confluence for parallel
+reduction. From \texttt{L\ —↠\ M₁} and \texttt{L\ —↠\ M₂} we have
+\texttt{L\ ⇛*\ M₁} and \texttt{L\ ⇛*\ M₂} by \texttt{betas-pars}. Then
+by confluence we obtain some \texttt{L} such that \texttt{M₁\ ⇛*\ N} and
+\texttt{M₂\ ⇛*\ N}, from which we conclude that \texttt{M₁\ —↠\ N} and
+\texttt{M₂\ —↠\ N} by \texttt{pars-betas}.
+
+\begin{fence}
+\begin{code}
+confluence : ∀{Γ A} {L M₁ M₂ : Γ ⊢ A}
+  → L —↠ M₁
+  → L —↠ M₂
+    -----------------------------------
+  → Σ[ N ∈ Γ ⊢ A ] (M₁ —↠ N) × (M₂ —↠ N)
+confluence L↠M₁ L↠M₂
+    with par-confluence (betas-pars L↠M₁) (betas-pars L↠M₂)
+... | ⟨ N , ⟨ M₁⇛N , M₂⇛N ⟩ ⟩ =
+      ⟨ N , ⟨ pars-betas M₁⇛N , pars-betas M₂⇛N ⟩ ⟩
+\end{code}
+\end{fence}
+
+\hypertarget{notes}{%
+\section{Notes}\label{notes}}
+
+Broadly speaking, this proof of confluence, based on parallel reduction,
+is due to W. Tait and P. Martin-Löf (see Barendredgt 1984, Section 3.2).
+Details of the mechanization come from several sources. The
+\texttt{subst-par} lemma is the ``strong substitutivity'' lemma of
+Shafer, Tebbi, and Smolka (ITP 2015). The proofs of
+\texttt{par-triangle}, \texttt{strip}, and \texttt{par-confluence} are
+based on the notion of complete development by Takahashi (1995) and
+Pfenning's 1992 technical report about the Church-Rosser theorem. In
+addition, we consulted Nipkow and Berghofer's mechanization in Isabelle,
+which is based on an earlier article by Nipkow (JAR 1996).
+
+\hypertarget{unicode}{%
+\section{Unicode}\label{unicode}}
+
+This chapter uses the following unicode:
+
+\begin{myDisplay}
+⇛  U+21DB  RIGHTWARDS TRIPLE ARROW (\r== or \Rrightarrow)
+⁺  U+207A  SUPERSCRIPT PLUS SIGN   (\^+)
+\end{myDisplay}
+
