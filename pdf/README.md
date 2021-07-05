@@ -4,6 +4,8 @@ First, run `stack build && stack exec site rebuild` from the parent directory to
 
 Then, running `make pdf` from the parent directory should be sufficient to compile the book. The book will be generated in this folder as `plfa.pdf`.
 
+Alternatively, makefile in this directory provide these options:
+
 ```make
 all                      # Build plfa.pdf (can also run from the parent as "make pdf")
 plfa-sample.pdf          # Build a shrinked version of the book for testing
