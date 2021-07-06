@@ -5,6 +5,7 @@ Dependencies (relative to the root):
 - agda source files under `src/`
 - `_site/acknowledgements.md` generated when building the site
 - `README.md`
+- the font `DejaVu mononoki Symbola Droid` installed globally. (Could change to local?)
 
 First, run `stack build && stack exec site rebuild` from the parent directory to generate acknowledgements.md under `_site`, which is needed by the pdf (Only need to do this once). 
 
