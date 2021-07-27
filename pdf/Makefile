@@ -1,7 +1,8 @@
-# The directory structure is important here
-# Font choice, scripts and files are all written based on relative paths
+# To use the makefile, specify the path to source files under SRC
+# and the path to pandoc-filters under FILTERS
 
-.PHONY: all all_tex clean
+
+.PHONY: all clean
 
 SRC := ../src
 SITE := ../_site
@@ -55,8 +56,6 @@ tex/%.lagda.tex : $(SRC)/%.lagda.md \
 	--top-level-division=chapter \
 	-o $@ \
 	--template=lagdamd2tex_chapter.latex
-
-# $(info $$var is [${var}]) (for debugging)
 
 # run agda under same directory with lagda.tex	
 latex/%.tex : tex/%.lagda.tex 
