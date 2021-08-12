@@ -9,7 +9,7 @@ SITE := ../_site
 front_and_back := latex/plfa/frontmatter/dedication.tex latex/plfa/frontmatter/README.tex\
 	latex/plfa/frontmatter/preface.tex latex/plfa/backmatter/acknowledgements.tex
 lagda_md_files := $(shell find $(SRC) -name '*.lagda.md')
-transpiled_files := $(patsubst $(SRC)/%.md,tex/%.tex,$(lagda_md_files))
+transpiled_files := $(patsubst $(SRC)/%.md,lagda_tex/%.tex,$(lagda_md_files))
 latex_files := $(patsubst $(SRC)/%.lagda.md,latex/%.tex,$(lagda_md_files)) 
 pdfs := $(patsubst $(SRC)/%.lagda.md,pdf/%.pdf,$(lagda_md_files))
 
@@ -44,7 +44,7 @@ all_pdfs : $(pdfs)
 # also can try treat first heading as chapter
 # by using --top-level-division=chapter
 # for the document title and level-2+ headings for sections.
-tex/%.lagda.tex : $(SRC)/%.lagda.md \
+lagda_tex/%.lagda.tex : $(SRC)/%.lagda.md \
 		codeblocks.lua rewrite-links.lua header-id.lua \
 		lagdamd2tex_chapter.latex 
 	@echo "Transpiling $< into $@"
@@ -58,9 +58,9 @@ tex/%.lagda.tex : $(SRC)/%.lagda.md \
 	--template=lagdamd2tex_chapter.latex
 
 # run agda under same directory with lagda.tex	
-latex/%.tex : tex/%.lagda.tex 
-	cd tex; agda --latex-dir=../latex \
-	--latex $(subst tex/,,$<)
+latex/%.tex : lagda_tex/%.lagda.tex 
+	cd lagda_tex; agda --latex-dir=../latex \
+	--latex $(subst lagda_tex/,,$<)
 
 
 pdf/%.pdf: latex/%.tex
@@ -79,12 +79,14 @@ latex/plfa/frontmatter/%.tex : $(SRC)/plfa/frontmatter/%.md codeblocks-readme.lu
 	-o $@ \
 	--template=lagdamd2tex_chapter.latex
 # for readme
-latex/plfa/frontmatter/README.tex : ../README.md codeblocks-readme.lua
+latex/plfa/frontmatter/README.tex : ../README.md codeblocks-readme.lua header-id.lua handle-badges.lua \
+					lagdamd2tex_chapter.latex
 	@echo "Transpiling $< into $@"
 	@mkdir -p '$(@D)'
 	pandoc $<   --indented-code-classes=default \
 	--lua-filter ./codeblocks-readme.lua \
 	--lua-filter ./header-id.lua \
+	--lua-filter ./handle-badges.lua
 	--top-level-division=chapter \
 	-o $@ \
 	--template=lagdamd2tex_chapter.latex
@@ -92,14 +94,14 @@ latex/plfa/frontmatter/README.tex : ../README.md codeblocks-readme.lua
 # process for acknowledgements
 # generate in _site/acknowledgements.md
 ../_site/acknowledgements.md : $(SRC)/plfa/backmatter/acknowledgements.md
-	stack build && stack exec site build
+	cd ..; stack build && stack exec site build
 
 # transpile once to html to unify the lists
 acknowledgements.html : $(SITE)/acknowledgements.md
 	pandoc -o $@ $<
 
 # compile the above version to latex
-latex/plfa/backmatter/acknowledgements.tex : acknowledgements.html
+latex/plfa/backmatter/acknowledgements.tex : acknowledgements.html lagdamd2tex_acknowledgement.latex
 	@echo "Transpiling $< into $@"
 	@mkdir -p '$(@D)'
 	pandoc $<   --indented-code-classes=default \
@@ -109,7 +111,7 @@ latex/plfa/backmatter/acknowledgements.tex : acknowledgements.html
 
 
 # general backmatter
-latex/plfa/backmatter/%.tex : $(SRC)/plfa/backmatter/%.md codeblocks-readme.lua
+latex/plfa/backmatter/%.tex : $(SRC)/plfa/backmatter/%.md codeblocks-readme.lua lagdamd2tex_chapter.latex
 	@echo "Transpiling $< into $@"
 	@mkdir -p '$(@D)'
 	pandoc $<   --indented-code-classes=default \
@@ -124,5 +126,3 @@ latex/plfa/backmatter/%.tex : $(SRC)/plfa/backmatter/%.md codeblocks-readme.lua
 clean:
 	$(RM) -rf $(GARBAGE_TYPED_FOLDERS)
 
-show: 
-	find . -name "*.md.bak"
