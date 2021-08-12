@@ -8,11 +8,11 @@ next      : /Naturals/
 
 <!-- Status & Version Badges -->
 
-```{=markdown}
+
 [![Calendar Version][plfa-calver]][plfa-latest]
 [![Agda][agda-version]][agda]
 [![agda-stdlib][agda-stdlib-version]][agda-stdlib]
-```
+
 
 ## Dependencies for users
 You can read PLFA [online][plfa] without installing anything. However, if you wish to interact with the code or complete the exercises, you need several things:
@@ -332,7 +332,7 @@ If you want Stack to use your system installation of GHC, follow the instruction
 [plfa-dev]: https://github.com/plfa/plfa.github.io/archive/dev.zip
 [plfa-status]: https://travis-ci.org/plfa/plfa.github.io.svg?branch=dev
 [plfa-travis]: https://travis-ci.org/plfa/plfa.github.io
-[plfa-calver]: https://img.shields.io/badge/calver-20.07-22bfda.png
+[plfa-calver]: https://img.shields.io/badge/calver-20.07-22bfda
 [plfa-latest]: https://github.com/plfa/plfa.github.io/releases/latest
 [plfa-master]: https://github.com/plfa/plfa.github.io/archive/master.zip
 [haskell-stack]:  https://docs.haskellstack.org/en/stable/README/
