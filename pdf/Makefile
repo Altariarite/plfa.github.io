@@ -86,7 +86,7 @@ latex/plfa/frontmatter/README.tex : ../README.md codeblocks-readme.lua header-id
 	pandoc $<   --indented-code-classes=default \
 	--lua-filter ./codeblocks-readme.lua \
 	--lua-filter ./header-id.lua \
-	--lua-filter ./handle-badges.lua
+	--lua-filter ./handle-badges.lua \
 	--top-level-division=chapter \
 	-o $@ \
 	--template=lagdamd2tex_chapter.latex
