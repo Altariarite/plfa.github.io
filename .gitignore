@@ -34,3 +34,11 @@ auto/
 out/
 *.zip
 versions/plfa.github.io-web-*/
+
+## lagda.md tools files
+pdf/lagda_tex/
+pdf/latex
+*.out
+*.ptb
+*.toc
+pdf/acknowledgements.html
